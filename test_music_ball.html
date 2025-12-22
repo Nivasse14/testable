@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Ball TikTok</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; }
+        canvas { display: block; }
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: Arial, sans-serif;
+            z-index: 100;
+            max-height: 90vh;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+        }
+        #controls.hidden {
+            transform: translateX(-110%);
+        }
+        #togglePanel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 255, 255, 0.9);
+            color: #000;
+            border: none;
+            padding: 12px 18px;
+            cursor: pointer;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 16px;
+            z-index: 101;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 255, 255, 0.3);
+        }
+        #togglePanel:hover {
+            background: rgba(0, 255, 255, 1);
+            transform: scale(1.05);
+        }
+        #togglePanel.shifted {
+            left: 280px;
+        }
+        button {
+            background: #00ffff;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        button:hover { background: #00cccc; }
+    </style>
+</head>
+<body>
+    <button id="togglePanel">🎵 Music Ball</button>
+    
+    <div id="controls">
+        <h3 style="margin: 0 0 10px 0; color: #00ffff;">🎵 Music Ball</h3>
+        <button id="fullscreenBtn" style="background: #4a90e2;">⛶ Plein écran</button>
+        <button id="editModeBtn" style="background: #ff8c00;">✋ Mode Édition</button>
+        <button id="wireframeBtn" style="background: #9b59b6;">□ Wireframe</button>
+        <button id="dropBtn">▶ Drop</button>
+        <button id="resetBtn">↻ Reset</button>
+        
+        <div id="editHelp" style="display: none; margin-top: 10px; padding: 10px; background: rgba(255,140,0,0.2); border-radius: 5px; font-size: 12px;">
+            <b>Clique</b> sur une plateforme (elle brille plus fort)<br>
+            <b>Flèches ←→↑↓</b> : déplacer XY<br>
+            <b>W/S</b> : déplacer Z (profondeur)<br>
+            <b>Molette / +/-</b> : zoom<br>
+            <b>Suppr</b> : supprimer plateforme
+        </div>
+        
+        <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #333;">
+            <div><b>Ajouter forme:</b></div>
+            <button id="addRect" style="width: 80px; margin: 3px; background: #3498db;">▬ Rect</button>
+            <button id="addCircle" style="width: 80px; margin: 3px; background: #e74c3c;">● Circle</button>
+            <button id="addDiamond" style="width: 80px; margin: 3px; background: #f39c12;">◆ Losange</button>
+            <button id="addHexagon" style="width: 80px; margin: 3px; background: #9b59b6;">⬡ Hexagone</button>
+            <button id="addTriangle" style="width: 80px; margin: 3px; background: #1abc9c;">▲ Triangle</button>
+            <button id="addStar" style="width: 80px; margin: 3px; background: #e67e22;">★ Étoile</button>
+            <button id="addTube" style="width: 80px; margin: 3px; background: #16a085;">◉ Tube</button>
+            <button id="addRamp" style="width: 80px; margin: 3px; background: #d35400;">⟋ Rampe ↓</button>
+            <button id="addRampUp" style="width: 80px; margin: 3px; background: #c0392b;">⟍ Rampe ↑</button>
+            <button id="addCurveLeft" style="width: 80px; margin: 3px; background: #2980b9;">◐ Courbe ←</button>
+            <button id="addCurveRight" style="width: 80px; margin: 3px; background: #8e44ad;">◑ Courbe →</button>
+            <button id="addHalfPipe" style="width: 80px; margin: 3px; background: #16a085;">⌒ Demi-tube</button>
+            <button id="addWave" style="width: 80px; margin: 3px; background: #27ae60;">≈ Vague</button>
+        </div>
+        
+        <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #333;">
+            <div><b>Plateformes:</b></div>
+            <div style="margin: 8px 0;">
+                <label>Écart horizontal: <span id="zigzagVal">3.5</span></label><br>
+                <input type="range" id="zigzag" min="1.0" max="6.0" step="0.1" value="3.5" style="width: 180px;">
+            </div>
+            
+            <div style="margin: 8px 0;">
+                <label>Écart vertical: <span id="spacingVal">2.2</span></label><br>
+                <input type="range" id="spacing" min="1.0" max="4.0" step="0.1" value="2.2" style="width: 180px;">
+            </div>
+            
+            <div style="margin: 8px 0;">
+                <label>Hauteur départ: <span id="startYVal">22</span></label><br>
+                <input type="range" id="startYSlider" min="15" max="30" step="1" value="22" style="width: 180px;">
+            </div>
+            
+            <button id="rebuildBtn" style="margin-top: 10px; width: 180px;">🔄 Reconstruire</button>
+        </div>
+        
+        <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #333;">
+            <div><b>Physique:</b></div>
+            <div style="margin: 8px 0;">
+                <label>Vitesse X: <span id="velXVal">2.0</span></label><br>
+                <input type="range" id="velX" min="0.5" max="5" step="0.1" value="2.0" style="width: 180px;">
+            </div>
+            
+            <div style="margin: 8px 0;">
+                <label>Rebond: <span id="restVal">0.85</span></label><br>
+                <input type="range" id="rest" min="0.5" max="1.0" step="0.05" value="0.85" style="width: 180px;">
+            </div>
+            
+            <div style="margin: 8px 0;">
+                <label>Friction: <span id="fricVal">0.2</span></label><br>
+                <input type="range" id="fric" min="0.0" max="0.5" step="0.05" value="0.2" style="width: 180px;">
+            </div>
+            
+            <div style="margin: 8px 0;">
+                <label>Gravité: <span id="gravVal">-15</span></label><br>
+                <input type="range" id="grav" min="-30" max="-5" step="1" value="-15" style="width: 180px;">
+            </div>
+        </div>
+        
+        <div style="margin-top: 10px; font-size: 11px; color: #888;">
+            Ajuste puis clique Reconstruire
+        </div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // Scene - TikTok 9:16 format
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a1a);
+        scene.fog = new THREE.Fog(0x1a1a1a, 20, 50);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 10, 12); // Front view of wall
+        camera.lookAt(0, 10, 0);
+        
+        // Raycaster for platform selection
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setSize(window.innerWidth, window.innerHeight); // Full window size
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        document.body.appendChild(renderer.domElement);
+
+        // Post-processing - BLOOM for glow effect
+        const composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        const bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            1.5,  // strength
+            0.4,  // radius
+            0.85  // threshold
+        );
+        composer.addPass(bloomPass);
+
+        // Lighting - Ambient + colored spotlights
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
+        scene.add(ambientLight);
+
+        const keyLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        keyLight.position.set(5, 15, 10);
+        keyLight.castShadow = true;
+        keyLight.shadow.mapSize.width = 1024;
+        keyLight.shadow.mapSize.height = 1024;
+        scene.add(keyLight);
+
+        // WALL - Grid of panels (anthracite gray)
+        const wallGroup = new THREE.Group();
+        const panelWidth = 2;
+        const panelHeight = 2;
+        const cols = 8;
+        const rows = 15;
+
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                const x = (col - cols / 2) * panelWidth;
+                const y = row * panelHeight;
+
+                // Panel with grid lines
+                const panelGeom = new THREE.BoxGeometry(panelWidth - 0.02, panelHeight - 0.02, 0.3);
+                const panelMat = new THREE.MeshStandardMaterial({
+                    color: 0x3a3a3a,
+                    roughness: 0.9,
+                    metalness: 0.1
+                });
+                const panel = new THREE.Mesh(panelGeom, panelMat);
+                panel.position.set(x, y, -2);
+                panel.receiveShadow = true;
+                wallGroup.add(panel);
+
+                // Grid line
+                const lineGeom = new THREE.BoxGeometry(panelWidth, 0.01, 0.31);
+                const lineMat = new THREE.MeshBasicMaterial({ color: 0x2a2a2a });
+                const line = new THREE.Mesh(lineGeom, lineMat);
+                line.position.set(x, y + panelHeight / 2, -1.99);
+                wallGroup.add(line);
+            }
+        }
+        scene.add(wallGroup);
+
+        // Physics
+        const world = new CANNON.World({
+            gravity: new CANNON.Vec3(0, -15, 0)
+        });
+
+        const platformMaterial = new CANNON.Material('platform');
+        const ballMaterial = new CANNON.Material('ball');
+        const contact = new CANNON.ContactMaterial(platformMaterial, ballMaterial, {
+            friction: 0.2,
+            restitution: 0.85
+        });
+        world.addContactMaterial(contact);
+
+        // BALL - Transparent cyan bubble with star inside
+        const ballRadius = 0.4;
+
+        // Outer bubble (transparent cyan)
+        const bubbleGeom = new THREE.SphereGeometry(ballRadius, 32, 32);
+        const bubbleMat = new THREE.MeshPhysicalMaterial({
+            color: 0x00ffff,
+            transparent: true,
+            opacity: 0.3,
+            roughness: 0.1,
+            metalness: 0.1,
+            transmission: 0.9,
+            thickness: 0.5,
+            envMapIntensity: 1,
+            emissive: 0x00ffff,
+            emissiveIntensity: 0.4
+        });
+        const bubbleMesh = new THREE.Mesh(bubbleGeom, bubbleMat);
+        bubbleMesh.castShadow = true;
+        scene.add(bubbleMesh);
+
+        // Star inside (yellow)
+        const starShape = new THREE.Shape();
+        const starRadius = 0.2;
+        for (let i = 0; i < 10; i++) {
+            const angle = (i / 10) * Math.PI * 2;
+            const r = i % 2 === 0 ? starRadius : starRadius * 0.5;
+            const x = Math.cos(angle) * r;
+            const y = Math.sin(angle) * r;
+            if (i === 0) starShape.moveTo(x, y);
+            else starShape.lineTo(x, y);
+        }
+        const starGeom = new THREE.ExtrudeGeometry(starShape, { depth: 0.05, bevelEnabled: false });
+        const starMat = new THREE.MeshStandardMaterial({
+            color: 0xffff00,
+            emissive: 0xffff00,
+            emissiveIntensity: 1.5,
+            metalness: 0.8,
+            roughness: 0.2
+        });
+        const starMesh = new THREE.Mesh(starGeom, starMat);
+        starMesh.rotation.z = Math.PI / 10;
+        scene.add(starMesh);
+
+        // Glow point light following ball
+        const ballLight = new THREE.PointLight(0x00ffff, 2, 5);
+        scene.add(ballLight);
+
+        // Ball physics
+        const ballShape = new CANNON.Sphere(ballRadius);
+        const ballBody = new CANNON.Body({
+            mass: 1,
+            shape: ballShape,
+            material: ballMaterial
+        });
+        ballBody.linearDamping = 0.1;
+        ballBody.angularDamping = 0.3;
+        world.addBody(ballBody);
+
+        // Particles
+        const particlesGeom = new THREE.BufferGeometry();
+        const particleCount = 20;
+        const particlePositions = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount; i++) {
+            particlePositions[i * 3] = 0;
+            particlePositions[i * 3 + 1] = 0;
+            particlePositions[i * 3 + 2] = 0;
+        }
+        particlesGeom.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+        const particlesMat = new THREE.PointsMaterial({
+            color: 0x00ffff,
+            size: 0.08,
+            transparent: true,
+            opacity: 0.8,
+            blending: THREE.AdditiveBlending
+        });
+        const particlesMesh = new THREE.Points(particlesGeom, particlesMat);
+        scene.add(particlesMesh);
+
+        // PLATFORMS - Perfect zigzag pattern (left-right-left...)
+        const platformColors = [0x7fffd4, 0x4a90e2, 0xffff00, 0xff69b4, 0xff8c00, 0x00ffff, 0xff4444];
+        let platforms = [];
+        let platformBodies = [];
+        let platformLights = [];
+        
+        let currentStartY = 22;
+        let currentSpacing = 2.2;
+        let currentZigzagWidth = 3.5;
+
+        function createPlatform(x, y, z, color, type = 'rect') {
+            let geom, width, height, depth, shape, rotation = 0;
+            
+            switch(type) {
+                case 'circle':
+                    width = 1.5;
+                    height = 0.2;
+                    depth = 1.5;
+                    geom = new THREE.CylinderGeometry(width/2, width/2, height, 32);
+                    shape = new CANNON.Cylinder(width/2, width/2, height, 32);
+                    break;
+                    
+                case 'diamond':
+                    width = 1.8;
+                    height = 0.2;
+                    depth = 1.8;
+                    geom = new THREE.BoxGeometry(width, height, depth);
+                    shape = new CANNON.Box(new CANNON.Vec3(width/2, height/2, depth/2));
+                    rotation = Math.PI / 4;
+                    break;
+                    
+                case 'hexagon':
+                    width = 1.6;
+                    height = 0.2;
+                    depth = 1.6;
+                    geom = new THREE.CylinderGeometry(width/2, width/2, height, 6);
+                    shape = new CANNON.Cylinder(width/2, width/2, height, 6);
+                    break;
+                    
+                case 'triangle':
+                    width = 2.0;
+                    height = 0.2;
+                    depth = 2.0;
+                    geom = new THREE.CylinderGeometry(0.1, width/2, height, 3);
+                    shape = new CANNON.Cylinder(0.1, width/2, height, 3);
+                    break;
+                    
+                case 'star':
+                    width = 1.8;
+                    height = 0.3;
+                    depth = 1.8;
+                    const starShape = new THREE.Shape();
+                    for (let i = 0; i < 10; i++) {
+                        const angle = (i / 10) * Math.PI * 2;
+                        const r = i % 2 === 0 ? width/2 : width/4;
+                        const sx = Math.cos(angle) * r;
+                        const sy = Math.sin(angle) * r;
+                        if (i === 0) starShape.moveTo(sx, sy);
+                        else starShape.lineTo(sx, sy);
+                    }
+                    geom = new THREE.ExtrudeGeometry(starShape, { depth: height, bevelEnabled: false });
+                    geom.rotateX(Math.PI / 2);
+                    shape = new CANNON.Cylinder(width/2, width/2, height, 8);
+                    break;
+                    
+                case 'tube':
+                    width = 1.2;
+                    height = 0.25;
+                    depth = 3.0;
+                    geom = new THREE.CylinderGeometry(height/2, height/2, depth, 16);
+                    geom.rotateX(Math.PI / 2);
+                    shape = new CANNON.Box(new CANNON.Vec3(height/2, height/2, depth/2));
+                    break;
+                    
+                case 'ramp':
+                    width = 2.0;
+                    height = 0.2;
+                    depth = 2.5;
+                    const rampGeom = new THREE.BufferGeometry();
+                    const vertices = new Float32Array([
+                        -width/2, 0, -depth/2,
+                        width/2, 0, -depth/2,
+                        width/2, height*3, depth/2,
+                        -width/2, height*3, depth/2,
+                        -width/2, 0, -depth/2,
+                        width/2, height*3, depth/2
+                    ]);
+                    rampGeom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+                    rampGeom.computeVertexNormals();
+                    geom = rampGeom;
+                    shape = new CANNON.Box(new CANNON.Vec3(width/2, height, depth/2));
+                    break;
+                    
+                case 'rampUp':
+                    width = 2.0;
+                    height = 0.2;
+                    depth = 2.5;
+                    const rampUpGeom = new THREE.BufferGeometry();
+                    const verticesUp = new Float32Array([
+                        -width/2, height*3, -depth/2,
+                        width/2, height*3, -depth/2,
+                        width/2, 0, depth/2,
+                        -width/2, 0, depth/2,
+                        -width/2, height*3, -depth/2,
+                        width/2, 0, depth/2
+                    ]);
+                    rampUpGeom.setAttribute('position', new THREE.BufferAttribute(verticesUp, 3));
+                    rampUpGeom.computeVertexNormals();
+                    geom = rampUpGeom;
+                    shape = new CANNON.Box(new CANNON.Vec3(width/2, height, depth/2));
+                    break;
+                    
+                case 'curveLeft':
+                    width = 3.0;
+                    height = 0.3;
+                    depth = 3.0;
+                    // Courbe en forme de C vers la gauche
+                    const curveLeft = new THREE.Shape();
+                    curveLeft.absarc(0, 0, width/2, 0, Math.PI, false);
+                    curveLeft.absarc(0, 0, width/2 - 0.5, Math.PI, 0, true);
+                    geom = new THREE.ExtrudeGeometry(curveLeft, { 
+                        depth: height, 
+                        bevelEnabled: false 
+                    });
+                    geom.rotateX(Math.PI / 2);
+                    shape = new CANNON.Box(new CANNON.Vec3(width/2, height/2, depth/2));
+                    break;
+                    
+                case 'curveRight':
+                    width = 3.0;
+                    height = 0.3;
+                    depth = 3.0;
+                    // Courbe en forme de C vers la droite
+                    const curveRight = new THREE.Shape();
+                    curveRight.absarc(0, 0, width/2, Math.PI, 0, false);
+                    curveRight.absarc(0, 0, width/2 - 0.5, 0, Math.PI, true);
+                    geom = new THREE.ExtrudeGeometry(curveRight, { 
+                        depth: height, 
+                        bevelEnabled: false 
+                    });
+                    geom.rotateX(Math.PI / 2);
+                    shape = new CANNON.Box(new CANNON.Vec3(width/2, height/2, depth/2));
+                    break;
+                    
+                case 'halfPipe':
+                    width = 2.5;
+                    height = 0.8;
+                    depth = 3.0;
+                    // Demi-cylindre (U inversé)
+                    const halfPipeGeom = new THREE.CylinderGeometry(width/2, width/2, depth, 32, 1, false, 0, Math.PI);
+                    halfPipeGeom.rotateX(Math.PI / 2);
+                    geom = halfPipeGeom;
+                    shape = new CANNON.Box(new CANNON.Vec3(width/2, height/2, depth/2));
+                    break;
+                    
+                case 'wave':
+                    width = 3.0;
+                    height = 0.25;
+                    depth = 4.0;
+                    // Forme ondulée
+                    const waveShape = new THREE.Shape();
+                    waveShape.moveTo(-width/2, 0);
+                    for (let i = 0; i <= 20; i++) {
+                        const t = i / 20;
+                        const x = -width/2 + t * width;
+                        const y = Math.sin(t * Math.PI * 3) * 0.3;
+                        waveShape.lineTo(x, y);
+                    }
+                    waveShape.lineTo(width/2, 0);
+                    waveShape.lineTo(-width/2, 0);
+                    geom = new THREE.ExtrudeGeometry(waveShape, { 
+                        depth: depth, 
+                        bevelEnabled: false 
+                    });
+                    geom.rotateX(-Math.PI / 2);
+                    geom.translate(0, height/2, 0);
+                    shape = new CANNON.Box(new CANNON.Vec3(width/2, height/2, depth/2));
+                    break;
+                    
+                default: // rect
+                    width = 2.5;
+                    height = 0.25;
+                    depth = 1.2;
+                    geom = new THREE.BoxGeometry(width, height, depth);
+                    shape = new CANNON.Box(new CANNON.Vec3(width/2, height/2, depth/2));
+            }
+
+            const mat = new THREE.MeshStandardMaterial({
+                color: color,
+                roughness: 0.3,
+                metalness: 0.6,
+                emissive: color,
+                emissiveIntensity: 0.5
+            });
+            const mesh = new THREE.Mesh(geom, mat);
+            mesh.position.set(x, y, z);
+            mesh.userData.shapeType = type;
+            if (rotation !== 0) {
+                mesh.rotation.z = rotation;
+            }
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+            platforms.push(mesh);
+
+            // Halo light on wall
+            const haloLight = new THREE.PointLight(color, 1.5, 4);
+            haloLight.position.set(x, y, z - 1);
+            scene.add(haloLight);
+            platformLights.push(haloLight);
+
+            // Physics
+            const body = new CANNON.Body({ mass: 0, material: platformMaterial });
+            body.addShape(shape);
+            body.position.set(x, y, z);
+            if (rotation !== 0) {
+                const quat = new CANNON.Quaternion();
+                quat.setFromAxisAngle(new CANNON.Vec3(0, 0, 1), rotation);
+                body.quaternion.copy(quat);
+            }
+            world.addBody(body);
+            platformBodies.push(body);
+        }
+
+        function buildPlatforms() {
+            // Clear existing platforms
+            platforms.forEach(p => scene.remove(p));
+            platformLights.forEach(l => scene.remove(l));
+            platformBodies.forEach(b => world.removeBody(b));
+            platforms = [];
+            platformLights = [];
+            platformBodies = [];
+            
+            // Create PERFECT ZIGZAG pattern - viral worthy!
+            // 20 platforms in perfect zigzag
+            for (let i = 0; i < 20; i++) {
+                const y = currentStartY - i * currentSpacing;
+                
+                // Alternate left (-) and right (+)
+                const side = (i % 2 === 0) ? -1 : 1;
+                const x = side * currentZigzagWidth;
+                
+                const z = 1 + Math.sin(i * 0.3) * 0.3; // Slight wave for depth
+                const color = platformColors[i % platformColors.length];
+                
+                // Every 3rd platform is a diamond for variety
+                const type = (i % 3 === 0) ? 'diamond' : 'rect';
+                
+                createPlatform(x, y, z, color, type);
+            }
+            
+            console.log(`Platforms rebuilt: startY=${currentStartY}, spacing=${currentSpacing}, zigzag=${currentZigzagWidth}`);
+        }
+        
+        // Initial build
+        buildPlatforms();
+
+        // Ground
+        const groundShape = new CANNON.Plane();
+        const groundBody = new CANNON.Body({ mass: 0, material: platformMaterial });
+        groundBody.addShape(groundShape);
+        groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+        groundBody.position.set(0, -2, 0);
+        world.addBody(groundBody);
+
+        // Controls
+        let currentVelX = 2.0;
+        let currentRestitution = 0.85;
+        let currentFriction = 0.2;
+        let currentGravity = -15;
+
+        // Platform sliders
+        const zigzagSlider = document.getElementById('zigzag');
+        const spacingSlider = document.getElementById('spacing');
+        const startYSlider = document.getElementById('startYSlider');
+        
+        zigzagSlider.addEventListener('input', (e) => {
+            currentZigzagWidth = parseFloat(e.target.value);
+            document.getElementById('zigzagVal').textContent = currentZigzagWidth.toFixed(1);
+        });
+        
+        spacingSlider.addEventListener('input', (e) => {
+            currentSpacing = parseFloat(e.target.value);
+            document.getElementById('spacingVal').textContent = currentSpacing.toFixed(1);
+        });
+        
+        startYSlider.addEventListener('input', (e) => {
+            currentStartY = parseFloat(e.target.value);
+            document.getElementById('startYVal').textContent = currentStartY.toFixed(0);
+        });
+        
+        document.getElementById('rebuildBtn').addEventListener('click', () => {
+            buildPlatforms();
+            resetBall();
+        });
+
+        // Physics sliders
+        const velXSlider = document.getElementById('velX');
+        const restSlider = document.getElementById('rest');
+        const fricSlider = document.getElementById('fric');
+        const gravSlider = document.getElementById('grav');
+
+        velXSlider.addEventListener('input', (e) => {
+            currentVelX = parseFloat(e.target.value);
+            document.getElementById('velXVal').textContent = currentVelX.toFixed(1);
+        });
+
+        restSlider.addEventListener('input', (e) => {
+            currentRestitution = parseFloat(e.target.value);
+            document.getElementById('restVal').textContent = currentRestitution.toFixed(2);
+            contact.restitution = currentRestitution;
+        });
+
+        fricSlider.addEventListener('input', (e) => {
+            currentFriction = parseFloat(e.target.value);
+            document.getElementById('fricVal').textContent = currentFriction.toFixed(2);
+            contact.friction = currentFriction;
+        });
+
+        gravSlider.addEventListener('input', (e) => {
+            currentGravity = parseFloat(e.target.value);
+            document.getElementById('gravVal').textContent = currentGravity;
+            world.gravity.set(0, currentGravity, 0);
+        });
+
+        function resetBall() {
+            ballBody.position.set(-currentZigzagWidth, currentStartY + 1.5, 1); // Start above first platform (left side)
+            ballBody.velocity.set(currentVelX, 0, 0); // Use current velocity
+            ballBody.angularVelocity.set(0, 0, 0);
+            console.log(`Drop: velX=${currentVelX}, rest=${currentRestitution}, fric=${currentFriction}, grav=${currentGravity}`);
+            console.log(`Platforms: zigzag=${currentZigzagWidth}, spacing=${currentSpacing}, startY=${currentStartY}`);
+        }
+
+        // Fullscreen
+        document.getElementById('fullscreenBtn').addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        });
+
+        // Toggle panel visibility
+        let panelVisible = true;
+        document.getElementById('togglePanel').addEventListener('click', () => {
+            panelVisible = !panelVisible;
+            const controls = document.getElementById('controls');
+            const toggleBtn = document.getElementById('togglePanel');
+            
+            if (panelVisible) {
+                controls.classList.remove('hidden');
+                toggleBtn.classList.add('shifted');
+                toggleBtn.textContent = '✕ Fermer';
+            } else {
+                controls.classList.add('hidden');
+                toggleBtn.classList.remove('shifted');
+                toggleBtn.textContent = '🎵 Music Ball';
+            }
+        });
+
+        // Wireframe toggle
+        let wireframeMode = false;
+        document.getElementById('wireframeBtn').addEventListener('click', () => {
+            wireframeMode = !wireframeMode;
+            const btn = document.getElementById('wireframeBtn');
+            
+            if (wireframeMode) {
+                btn.style.background = '#27ae60';
+                btn.textContent = '✓ Wireframe';
+                // Show wireframes for all platforms
+                platforms.forEach(p => p.material.wireframe = true);
+                bubbleMesh.material.wireframe = true;
+            } else {
+                btn.style.background = '#9b59b6';
+                btn.textContent = '□ Wireframe';
+                // Hide wireframes
+                platforms.forEach(p => p.material.wireframe = false);
+                bubbleMesh.material.wireframe = false;
+            }
+        });
+
+        // Add shape buttons
+        const shapeButtons = {
+            'addRect': 'rect',
+            'addCircle': 'circle',
+            'addDiamond': 'diamond',
+            'addHexagon': 'hexagon',
+            'addTriangle': 'triangle',
+            'addStar': 'star',
+            'addTube': 'tube',
+            'addRamp': 'ramp',
+            'addRampUp': 'rampUp',
+            'addCurveLeft': 'curveLeft',
+            'addCurveRight': 'curveRight',
+            'addHalfPipe': 'halfPipe',
+            'addWave': 'wave'
+        };
+
+        Object.keys(shapeButtons).forEach(btnId => {
+            document.getElementById(btnId).addEventListener('click', () => {
+                const shapeType = shapeButtons[btnId];
+                const randomColor = platformColors[Math.floor(Math.random() * platformColors.length)];
+                const x = (Math.random() - 0.5) * 8;
+                const y = 15 + Math.random() * 10;
+                const z = 1;
+                createPlatform(x, y, z, randomColor, shapeType);
+                console.log(`Ajouté: ${shapeType} à position (${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)})`);
+            });
+        });
+
+        document.getElementById('dropBtn').addEventListener('click', resetBall);
+        document.getElementById('resetBtn').addEventListener('click', resetBall);
+
+        // Edit Mode - Interactive platform positioning
+        let editMode = false;
+        let selectedPlatform = null;
+        let selectedPlatformIndex = -1;
+        let cameraZoom = 12; // Initial Z position
+        const minZoom = 5;
+        const maxZoom = 40;
+
+        document.getElementById('editModeBtn').addEventListener('click', () => {
+            editMode = !editMode;
+            const btn = document.getElementById('editModeBtn');
+            const help = document.getElementById('editHelp');
+            if (editMode) {
+                btn.style.background = '#00ff00';
+                btn.textContent = '✓ Mode Édition';
+                help.style.display = 'block';
+                // Zoom out to see all platforms
+                cameraZoom = 25;
+                camera.position.set(0, 10, cameraZoom);
+                camera.lookAt(0, 10, 0);
+            } else {
+                btn.style.background = '#ff8c00';
+                btn.textContent = '✋ Mode Édition';
+                help.style.display = 'none';
+                // Zoom back in for gameplay
+                cameraZoom = 12;
+                camera.position.set(0, 10, cameraZoom);
+                camera.lookAt(0, 10, 0);
+                if (selectedPlatform) {
+                    selectedPlatform.material.emissiveIntensity = 0.5;
+                    selectedPlatform = null;
+                }
+            }
+        });
+
+        // Zoom with mouse wheel
+        window.addEventListener('wheel', (event) => {
+            if (!editMode) return;
+            event.preventDefault();
+            
+            const zoomSpeed = 0.5;
+            cameraZoom += event.deltaY * 0.01 * zoomSpeed;
+            cameraZoom = Math.max(minZoom, Math.min(maxZoom, cameraZoom));
+            
+            camera.position.z = cameraZoom;
+        }, { passive: false });
+
+        // Mouse click to select platform
+        window.addEventListener('click', (event) => {
+            if (!editMode) return;
+
+            // Calculate mouse position in normalized device coordinates
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(platforms, false);
+
+            // Deselect previous
+            if (selectedPlatform) {
+                selectedPlatform.material.emissiveIntensity = 0.5;
+            }
+
+            if (intersects.length > 0) {
+                selectedPlatform = intersects[0].object;
+                selectedPlatformIndex = platforms.indexOf(selectedPlatform);
+                selectedPlatform.material.emissiveIntensity = 2.0; // More visible
+                console.log(`✓ Plateforme ${selectedPlatformIndex} sélectionnée - Position: x=${selectedPlatform.position.x.toFixed(1)}, y=${selectedPlatform.position.y.toFixed(1)}, z=${selectedPlatform.position.z.toFixed(1)}`);
+            } else {
+                selectedPlatform = null;
+                selectedPlatformIndex = -1;
+                console.log('Aucune plateforme sélectionnée');
+            }
+        });
+
+        // Keyboard arrows to move selected platform
+        document.addEventListener('keydown', (event) => {
+            if (!editMode) return;
+            
+            // Zoom controls
+            if (event.key === '+' || event.key === '=') {
+                cameraZoom = Math.max(minZoom, cameraZoom - 1);
+                camera.position.z = cameraZoom;
+                event.preventDefault();
+                return;
+            } else if (event.key === '-' || event.key === '_') {
+                cameraZoom = Math.min(maxZoom, cameraZoom + 1);
+                camera.position.z = cameraZoom;
+                event.preventDefault();
+                return;
+            }
+            
+            // Delete platform
+            if ((event.key === 'Delete' || event.key === 'Backspace') && selectedPlatform) {
+                const index = selectedPlatformIndex;
+                
+                // Remove from scene
+                scene.remove(platforms[index]);
+                scene.remove(platformLights[index]);
+                world.removeBody(platformBodies[index]);
+                
+                // Remove from arrays
+                platforms.splice(index, 1);
+                platformLights.splice(index, 1);
+                platformBodies.splice(index, 1);
+                
+                selectedPlatform = null;
+                selectedPlatformIndex = -1;
+                
+                console.log(`Plateforme ${index} supprimée`);
+                event.preventDefault();
+                return;
+            }
+            
+            // Platform movement (only if one is selected)
+            if (!selectedPlatform) return;
+
+            const moveStep = 0.2;
+            const platformBody = platformBodies[selectedPlatformIndex];
+            const light = platformLights[selectedPlatformIndex];
+
+            switch(event.key) {
+                case 'ArrowLeft':
+                    selectedPlatform.position.x -= moveStep;
+                    platformBody.position.x -= moveStep;
+                    light.position.x -= moveStep;
+                    event.preventDefault();
+                    break;
+                case 'ArrowRight':
+                    selectedPlatform.position.x += moveStep;
+                    platformBody.position.x += moveStep;
+                    light.position.x += moveStep;
+                    event.preventDefault();
+                    break;
+                case 'ArrowUp':
+                    selectedPlatform.position.y += moveStep;
+                    platformBody.position.y += moveStep;
+                    light.position.y += moveStep;
+                    event.preventDefault();
+                    break;
+                case 'ArrowDown':
+                    selectedPlatform.position.y -= moveStep;
+                    platformBody.position.y -= moveStep;
+                    light.position.y -= moveStep;
+                    event.preventDefault();
+                    break;
+                case 'w':
+                case 'W':
+                    selectedPlatform.position.z += moveStep;
+                    platformBody.position.z += moveStep;
+                    light.position.z += moveStep;
+                    event.preventDefault();
+                    break;
+                case 's':
+                case 'S':
+                    selectedPlatform.position.z -= moveStep;
+                    platformBody.position.z -= moveStep;
+                    light.position.z -= moveStep;
+                    event.preventDefault();
+                    break;
+            }
+            
+            console.log(`Plateforme ${selectedPlatformIndex}: x=${selectedPlatform.position.x.toFixed(1)}, y=${selectedPlatform.position.y.toFixed(1)}, z=${selectedPlatform.position.z.toFixed(1)}`);
+        });
+
+        resetBall();
+
+        // Animation
+        const fixedTimeStep = 1 / 60;
+        let lastTime = performance.now() / 1000;
+        const cameraTarget = new THREE.Vector3();
+        const cameraVelocity = new THREE.Vector3();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const time = performance.now() / 1000;
+            const deltaTime = time - lastTime;
+            lastTime = time;
+
+            world.step(fixedTimeStep, deltaTime, 3);
+
+            // Update ball
+            bubbleMesh.position.copy(ballBody.position);
+            bubbleMesh.quaternion.copy(ballBody.quaternion);
+            
+            // Star follows ball
+            starMesh.position.copy(ballBody.position);
+            starMesh.rotation.y += 0.05;
+
+            // Ball light
+            ballLight.position.copy(ballBody.position);
+
+            // Particles trail
+            const positions = particlesGeom.attributes.position.array;
+            for (let i = particleCount - 1; i > 0; i--) {
+                positions[i * 3] = positions[(i - 1) * 3];
+                positions[i * 3 + 1] = positions[(i - 1) * 3 + 1];
+                positions[i * 3 + 2] = positions[(i - 1) * 3 + 2];
+            }
+            positions[0] = ballBody.position.x + (Math.random() - 0.5) * 0.2;
+            positions[1] = ballBody.position.y + (Math.random() - 0.5) * 0.2;
+            positions[2] = ballBody.position.z + (Math.random() - 0.5) * 0.2;
+            particlesGeom.attributes.position.needsUpdate = true;
+
+            // Smooth camera follow (damped spring) - disabled in edit mode
+            if (!editMode) {
+                cameraTarget.set(
+                    ballBody.position.x * 0.2,
+                    ballBody.position.y,
+                    12
+                );
+                cameraVelocity.lerp(cameraTarget.clone().sub(camera.position), 0.05);
+                camera.position.add(cameraVelocity.multiplyScalar(deltaTime * 20));
+                camera.lookAt(ballBody.position.x * 0.2, ballBody.position.y - 2, 0);
+            }
+
+            composer.render();
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
