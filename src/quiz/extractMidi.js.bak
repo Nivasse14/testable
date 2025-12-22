@@ -1,0 +1,140 @@
+/**
+ * Extract MIDI from audio using basic-pitch
+ * Wrapper pour l'outil CLI basic-pitch
+ */
+
+import { spawn } from 'child_process';
+import { join, basename, extname } from 'path';
+import { existsSync } from 'fs';
+import Logger from '../utils/logger.js';
+import { fileHash } from '../utils/fsx.js';
+import retry from '../utils/retry.js';
+
+const logger = new Logger('MIDI');
+
+/**
+ * Extrait un fichier MIDI depuis audio via basic-pitch
+ * @param {string} audioPath - Chemin du fichier audio
+ * @param {string} outputDir - Dossier de sortie pour le MIDI
+ * @returns {Promise<string>} - Chemin du fichier MIDI généré
+ */
+export async function extractMidi(audioPath, outputDir) {
+  const trackName = basename(audioPath, extname(audioPath));
+  const midiPath = join(outputDir, `${trackName}.mid`);
+
+  // Cache: si le MIDI existe déjà avec même hash audio
+  const cacheFile = join(outputDir, `${trackName}_midi.hash`);
+  const currentHash = await fileHash(audioPath);
+
+  if (existsSync(midiPath) && existsSync(cacheFile)) {
+    const cachedHash = (await import('fs')).readFileSync(cacheFile, 'utf-8').trim();
+    if (cachedHash === currentHash) {
+      logger.info(`Utilisation cache MIDI: ${midiPath}`);
+      return midiPath;
+    }
+  }
+
+  logger.info(`Extraction MIDI avec basic-pitch: ${audioPath}`);
+
+  // Vérifier que basic-pitch est installé
+  const basicPitchCmd = findBasicPitch();
+  try {
+    await runCommand(basicPitchCmd, ['--help'], { capture: true });
+  } catch (error) {
+    throw new Error(
+      'basic-pitch non trouvé. Installez: pip3 install basic-pitch\n' +
+      'Puis ajoutez au PATH: export PATH="/Library/Frameworks/Python.framework/Versions/3.13/bin:$PATH"'
+    );
+  // Appel basic-pitch
+  // basic-pitch [output_dir] [audio_file] --save-midi
+  const args = [
+    outputDir,
+    audioPath,
+    '--save-midi',
+  ];
+
+  await retry(async () => {
+    await runCommand(basicPitchCmd, args);
+  }, 1);retry(async () => {
+    await runCommand('basic-pitch', args);
+  }, 1);
+
+  // Vérifier que le MIDI a été créé
+  if (!existsSync(midiPath)) {
+    throw new Error(`MIDI non généré: ${midiPath}`);
+  }
+
+  // Sauvegarder hash pour cache
+  (await import('fs')).writeFileSync(cacheFile, currentHash, 'utf-8');
+
+  logger.success(`MIDI extrait: ${midiPath}`);
+  return midiPath;
+}
+
+/**
+/**
+ * Cherche basic-pitch dans les chemins possibles
+ */
+function findBasicPitch() {
+  const { execSync } = require('child_process');
+  const possiblePaths = [
+    'basic-pitch',  // Dans PATH
+    '/Library/Frameworks/Python.framework/Versions/3.13/bin/basic-pitch',
+    '/usr/local/bin/basic-pitch',
+    '/opt/homebrew/bin/basic-pitch',
+  ];
+
+  for (const path of possiblePaths) {
+    try {
+      execSync(`which ${path}`, { stdio: 'ignore' });
+      return path;
+    } catch {
+      // Continue
+    }
+  }
+
+  // Fallback: vérifier directement si exécutable existe
+  for (const path of possiblePaths) {
+    if (path.startsWith('/')) {
+      try {
+        execSync(`test -x ${path}`, { stdio: 'ignore' });
+        return path;
+      } catch {
+        // Continue
+      }
+    }
+  }
+
+  return 'basic-pitch'; // Fallback
+}
+
+/**
+ * Exécute une commande CLI
+ */
+function runCommand(command, args, options = {}) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(command, args, {
+      stdio: options.capture ? 'pipe' : 'inherit',
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    if (options.capture) {
+      proc.stdout?.on('data', (data) => (stdout += data.toString()));
+      proc.stderr?.on('data', (data) => (stderr += data.toString()));
+    }
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`${command} échoué (code ${code}): ${stderr || stdout}`));
+      } else {
+        resolve(stdout);
+      }
+    });
+
+    proc.on('error', (err) => {
+      reject(new Error(`${command} erreur: ${err.message}`));
+    });
+  });
+}

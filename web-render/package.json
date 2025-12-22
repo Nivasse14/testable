@@ -1,0 +1,13 @@
+{
+  "name": "meshy-web-renderer",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "three": "^0.160.0",
+    "puppeteer": "^21.0.0",
+    "express": "^4.18.2"
+  },
+  "scripts": {
+    "render": "node render_web.js"
+  }
+}

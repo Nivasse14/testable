@@ -1,0 +1,13 @@
+node_modules/
+*.mp4
+*.mp3
+*.wav
+.DS_Store
+*.log
+.env
+audio/
+output/
+frames/
+cache/
+data/*.json
+!data/.gitkeep

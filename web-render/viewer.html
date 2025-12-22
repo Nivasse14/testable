@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Meshy 3D Viewer</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #0a0a0a; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Configuration
+        const CONFIG = {
+            width: 1080,
+            height: 1920,
+            fps: 30,
+            duration: 10, // seconds
+            glbPath: '../assets/leo_10s_crescendo_level.glb'
+        };
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a0a);
+        
+        const camera = new THREE.PerspectiveCamera(
+            50,
+            CONFIG.width / CONFIG.height,
+            0.1,
+            1000
+        );
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(CONFIG.width, CONFIG.height);
+        document.body.appendChild(renderer.domElement);
+
+        // Lights - Luxury setup
+        const keyLight = new THREE.DirectionalLight(0xffeebb, 2);
+        keyLight.position.set(6, 15, -10);
+        scene.add(keyLight);
+
+        const rimLight = new THREE.DirectionalLight(0xffcc66, 1.5);
+        rimLight.position.set(-8, 12, -8);
+        scene.add(rimLight);
+
+        const backLight = new THREE.PointLight(0xffaa44, 1, 100);
+        backLight.position.set(0, 10, 8);
+        scene.add(backLight);
+
+        const ambient = new THREE.AmbientLight(0x404040, 0.3);
+        scene.add(ambient);
+
+        // Golden ball
+        const ballGeometry = new THREE.SphereGeometry(0.7, 32, 32);
+        const ballMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffc356,
+            metalness: 1.0,
+            roughness: 0.05,
+            emissive: 0x332200,
+            emissiveIntensity: 0.2
+        });
+        const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+        ball.position.set(0, 3, 0);
+        scene.add(ball);
+
+        // Load level
+        let level = null;
+        let levelCenter = new THREE.Vector3();
+        
+        const loader = new GLTFLoader();
+        loader.load(CONFIG.glbPath, (gltf) => {
+            level = gltf.scene;
+            scene.add(level);
+            
+            // Calculate center
+            const box = new THREE.Box3().setFromObject(level);
+            box.getCenter(levelCenter);
+            
+            console.log('Level loaded, center:', levelCenter);
+            
+            // Position camera
+            camera.position.set(
+                levelCenter.x + 8,
+                levelCenter.y + 5,
+                levelCenter.z - 6
+            );
+            camera.lookAt(levelCenter);
+            
+            // Start animation
+            window.startAnimation();
+        });
+
+        // Animation data (from audio analysis)
+        const onsets = window.ONSET_TIMES || [];
+        let currentFrame = 0;
+        let isRecording = false;
+
+        // Animation function
+        function animate() {
+            if (!isRecording) return;
+            
+            const time = currentFrame / CONFIG.fps;
+            const progress = time / CONFIG.duration;
+            
+            // Ball animation - spiral descent
+            const angle = progress * Math.PI * 4;
+            const radius = 3 * (1 - progress * 0.3);
+            const height = 5 - progress * 8;
+            
+            ball.position.x = levelCenter.x + radius * Math.cos(angle);
+            ball.position.y = levelCenter.y + height;
+            ball.position.z = levelCenter.z + radius * Math.sin(angle);
+            
+            // Bounce at onsets
+            const nearestOnset = onsets.find(t => Math.abs(t - time) < 0.03);
+            if (nearestOnset) {
+                ball.scale.set(1.2, 1.2, 1.2);
+            } else {
+                ball.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
+            }
+            
+            // Camera follows
+            camera.position.lerp(new THREE.Vector3(
+                ball.position.x + 8,
+                ball.position.y + 5,
+                ball.position.z - 6
+            ), 0.05);
+            camera.lookAt(ball.position);
+            
+            // Render
+            renderer.render(scene, camera);
+            
+            currentFrame++;
+            
+            if (time >= CONFIG.duration) {
+                console.log('Animation complete');
+                isRecording = false;
+                window.animationComplete = true;
+            }
+        }
+
+        // Start recording
+        window.startAnimation = () => {
+            console.log('Starting animation...');
+            isRecording = true;
+            
+            function loop() {
+                if (isRecording) {
+                    animate();
+                    requestAnimationFrame(loop);
+                }
+            }
+            loop();
+        };
+
+        // Manual test without recording
+        function testRender() {
+            renderer.render(scene, camera);
+            requestAnimationFrame(testRender);
+        }
+        
+        if (!window.PUPPETEER_MODE) {
+            testRender();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,404 @@
+/**
+ * Écriture de fichiers MIDI propres à partir de notes structurées
+ * Génère un MIDI binaire manuel (sans dépendance encoder)
+ */
+
+import { writeFileSync } from 'fs';
+import Logger from '../utils/logger.js';
+
+const logger = new Logger('WRITE-MIDI');
+
+/**
+ * Écrit un fichier MIDI monophonique propre
+ * @param {Array} notes - Notes nettoyées [{start, end, pitch, velocity}]
+ * @param {string} outMidiPath - Chemin de sortie
+ * @param {Object} options - Options MIDI
+ * @returns {string} - Chemin du fichier créé
+ */
+export default function writeMidi(notes, outMidiPath, options = {}) {
+  const {
+    tempo = 120, // BPM
+    ppq = 480, // Pulses per quarter note (résolution)
+    instrument = 13, // MIDI GM: 13 = Xylophone, 14 = Tubular Bells, 11 = Vibraphone
+    trackName = 'Xylophone Melody',
+  } = options;
+
+  logger.info(`Écriture MIDI: ${notes.length} notes`);
+  logger.info(`  → Instrument: GM ${instrument} (${getInstrumentName(instrument)})`);
+  logger.info(`  → Tempo: ${tempo} BPM, PPQ: ${ppq}`);
+
+  // Construire MIDI binaire manuellement
+  const midiBytes = buildMidiFile(notes, { tempo, ppq, instrument, trackName });
+  
+  // Écrire fichier
+  writeFileSync(outMidiPath, Buffer.from(midiBytes));
+
+  logger.success(`✓ MIDI écrit: ${outMidiPath}`);
+
+  return outMidiPath;
+}
+
+/**
+ * Construit un fichier MIDI complet en bytes
+ */
+function buildMidiFile(notes, options) {
+  const { tempo, ppq, instrument, trackName } = options;
+  
+  const bytes = [];
+  
+  // Header chunk
+  bytes.push(...stringToBytes('MThd')); // Chunk type
+  bytes.push(...int32(6)); // Chunk length
+  bytes.push(...int16(1)); // Format type (1 = multi-track)
+  bytes.push(...int16(2)); // Number of tracks (meta + notes)
+  bytes.push(...int16(ppq)); // Ticks per quarter note
+  
+  // Track 0: Tempo + metadata
+  const track0 = [];
+  
+  // Track name
+  track0.push(...varLen(0)); // Delta time
+  track0.push(0xFF, 0x03); // Meta: Track Name
+  const nameBytes = stringToBytes(trackName);
+  track0.push(...varLen(nameBytes.length));
+  track0.push(...nameBytes);
+  
+  // Tempo
+  track0.push(...varLen(0)); // Delta time
+  track0.push(0xFF, 0x51, 0x03); // Meta: Set Tempo
+  const microsecondsPerQuarter = Math.round(60000000 / tempo);
+  track0.push(
+    (microsecondsPerQuarter >> 16) & 0xFF,
+    (microsecondsPerQuarter >> 8) & 0xFF,
+    microsecondsPerQuarter & 0xFF
+  );
+  
+  // Time signature 4/4
+  track0.push(...varLen(0));
+  track0.push(0xFF, 0x58, 0x04); // Meta: Time Signature
+  track0.push(4, 2, 24, 8); // 4/4
+  
+  // End of track
+  track0.push(...varLen(0));
+  track0.push(0xFF, 0x2F, 0x00);
+  
+  // Write track 0
+  bytes.push(...stringToBytes('MTrk'));
+  bytes.push(...int32(track0.length));
+  bytes.push(...track0);
+  
+  // Track 1: Notes
+  const track1 = [];
+  
+  // Program change (instrument)
+  track1.push(...varLen(0));
+  track1.push(0xC0); // Program change, channel 0
+  track1.push(instrument);
+  
+  // Convert notes to MIDI events
+  const events = [];
+  for (const note of notes) {
+    const startTick = secondsToTicks(note.start, tempo, ppq);
+    const endTick = secondsToTicks(note.end, tempo, ppq);
+    
+    events.push({ tick: startTick, type: 'on', pitch: note.pitch, velocity: note.velocity });
+    events.push({ tick: endTick, type: 'off', pitch: note.pitch, velocity: 0 });
+  }
+  
+  // Sort by tick
+  events.sort((a, b) => a.tick - b.tick);
+  
+  // Write events with delta times
+  let lastTick = 0;
+  for (const event of events) {
+    const delta = event.tick - lastTick;
+    track1.push(...varLen(delta));
+    
+    if (event.type === 'on') {
+      track1.push(0x90); // Note On, channel 0
+      track1.push(event.pitch);
+      track1.push(event.velocity);
+    } else {
+      track1.push(0x80); // Note Off, channel 0
+      track1.push(event.pitch);
+      track1.push(event.velocity);
+    }
+    
+    lastTick = event.tick;
+  }
+  
+  // End of track
+  track1.push(...varLen(0));
+  track1.push(0xFF, 0x2F, 0x00);
+  
+  // Write track 1
+  bytes.push(...stringToBytes('MTrk'));
+  bytes.push(...int32(track1.length));
+  bytes.push(...track1);
+  
+  return bytes;
+}
+
+/**
+ * Convertit secondes → ticks MIDI
+ */
+function secondsToTicks(seconds, tempo, ppq) {
+  return Math.round(seconds * (tempo / 60) * ppq);
+}
+
+/**
+ * Convertit string en array of bytes (ASCII)
+ */
+function stringToBytes(str) {
+  return Array.from(Buffer.from(str, 'ascii'));
+}
+
+/**
+ * Convertit int32 big-endian
+ */
+function int32(value) {
+  return [
+    (value >> 24) & 0xFF,
+    (value >> 16) & 0xFF,
+    (value >> 8) & 0xFF,
+    value & 0xFF,
+  ];
+}
+
+/**
+ * Convertit int16 big-endian
+ */
+function int16(value) {
+  return [(value >> 8) & 0xFF, value & 0xFF];
+}
+
+/**
+ * Encode variable-length quantity (MIDI standard)
+ */
+function varLen(value) {
+  const bytes = [];
+  let v = value;
+  
+  if (v === 0) return [0];
+  
+  while (v > 0) {
+    bytes.unshift(v & 0x7F);
+    v >>= 7;
+  }
+  
+  for (let i = 0; i < bytes.length - 1; i++) {
+    bytes[i] |= 0x80;
+  }
+  
+  return bytes;
+}
+
+/**
+ * Noms d'instruments MIDI GM
+ */
+function getInstrumentName(program) {
+  const instruments = {
+    0: 'Acoustic Grand Piano',
+    11: 'Vibraphone',
+    12: 'Marimba',
+    13: 'Xylophone',
+    14: 'Tubular Bells',
+    15: 'Dulcimer',
+  };
+  return instruments[program] || `Program ${program}`;
+}
+
+const logger = new Logger('WRITE-MIDI');
+
+/**
+ * Écrit un fichier MIDI monophonique propre
+ * @param {Array} notes - Notes nettoyées [{start, end, pitch, velocity}]
+ * @param {string} outMidiPath - Chemin de sortie
+ * @param {Object} options - Options MIDI
+ * @returns {string} - Chemin du fichier créé
+ */
+export default function writeMidi(notes, outMidiPath, options = {}) {
+  const {
+    tempo = 120, // BPM
+    ppq = 480, // Pulses per quarter note (résolution)
+    instrument = 13, // MIDI GM: 13 = Xylophone, 14 = Tubular Bells, 11 = Vibraphone
+    trackName = 'Xylophone Melody',
+  } = options;
+
+  logger.info(`Écriture MIDI: ${notes.length} notes`);
+  logger.info(`  → Instrument: GM ${instrument} (${getInstrumentName(instrument)})`);
+  logger.info(`  → Tempo: ${tempo} BPM, PPQ: ${ppq}`);
+
+  // Créer structure MIDI
+  const midiData = {
+    formatType: 1, // Format 1: multiple tracks, synchronous
+    timeDivision: ppq,
+    track: [],
+  };
+
+  // TRACK 0: Metadata (tempo, time signature)
+  const metaTrack = {
+    event: [
+      // Track name
+      {
+        deltaTime: 0,
+        type: 255,
+        metaType: 3,
+        data: stringToBytes(trackName),
+      },
+      // Tempo (microseconds per quarter note)
+      {
+        deltaTime: 0,
+        type: 255,
+        metaType: 81,
+        data: tempoToBytes(tempo),
+      },
+      // Time signature 4/4
+      {
+        deltaTime: 0,
+        type: 255,
+        metaType: 88,
+        data: [4, 2, 24, 8], // 4/4, 24 MIDI clocks per metronome, 8 32nd notes per quarter
+      },
+      // End of track
+      {
+        deltaTime: 0,
+        type: 255,
+        metaType: 47,
+        data: [],
+      },
+    ],
+  };
+
+  midiData.track.push(metaTrack);
+
+  // TRACK 1: Notes
+  const noteTrack = {
+    event: [],
+  };
+
+  // Program change (instrument)
+  noteTrack.event.push({
+    deltaTime: 0,
+    type: 12, // Program change
+    channel: 0,
+    data: [instrument],
+  });
+
+  // Convertir notes en événements MIDI
+  const events = [];
+
+  for (const note of notes) {
+    const startTick = secondsToTicks(note.start, tempo, ppq);
+    const endTick = secondsToTicks(note.end, tempo, ppq);
+
+    // Note On
+    events.push({
+      tick: startTick,
+      type: 'noteOn',
+      channel: 0,
+      pitch: note.pitch,
+      velocity: note.velocity,
+    });
+
+    // Note Off
+    events.push({
+      tick: endTick,
+      type: 'noteOff',
+      channel: 0,
+      pitch: note.pitch,
+      velocity: 0,
+    });
+  }
+
+  // Trier par tick
+  events.sort((a, b) => a.tick - b.tick);
+
+  // Convertir en deltaTime
+  let lastTick = 0;
+  for (const event of events) {
+    const deltaTime = event.tick - lastTick;
+    lastTick = event.tick;
+
+    if (event.type === 'noteOn') {
+      noteTrack.event.push({
+        deltaTime,
+        type: 9, // Note On
+        channel: event.channel,
+        data: [event.pitch, event.velocity],
+      });
+    } else if (event.type === 'noteOff') {
+      noteTrack.event.push({
+        deltaTime,
+        type: 8, // Note Off
+        channel: event.channel,
+        data: [event.pitch, event.velocity],
+      });
+    }
+  }
+
+  // End of track
+  noteTrack.event.push({
+    deltaTime: 0,
+    type: 255,
+    metaType: 47,
+    data: [],
+  });
+
+  midiData.track.push(noteTrack);
+
+  // Encoder en binary MIDI
+  const midiBytes = MidiParser.encode(midiData);
+  
+  // Écrire fichier
+  writeFileSync(outMidiPath, Buffer.from(midiBytes));
+
+  logger.success(`✓ MIDI écrit: ${outMidiPath}`);
+
+  return outMidiPath;
+}
+
+/**
+ * Convertit secondes → ticks MIDI
+ */
+function secondsToTicks(seconds, tempo, ppq) {
+  // tempo en BPM, ppq = ticks per quarter note
+  // 1 beat = 60/tempo seconds
+  // ticks = seconds * (tempo / 60) * ppq
+  return Math.round(seconds * (tempo / 60) * ppq);
+}
+
+/**
+ * Convertit tempo BPM → microseconds per quarter note
+ */
+function tempoToBytes(tempoBPM) {
+  const microsecondsPerQuarter = Math.round(60000000 / tempoBPM);
+  return [
+    (microsecondsPerQuarter >> 16) & 0xff,
+    (microsecondsPerQuarter >> 8) & 0xff,
+    microsecondsPerQuarter & 0xff,
+  ];
+}
+
+/**
+ * Convertit string → array of bytes
+ */
+function stringToBytes(str) {
+  return Array.from(Buffer.from(str, 'utf-8'));
+}
+
+/**
+ * Noms d'instruments MIDI GM
+ */
+function getInstrumentName(program) {
+  const instruments = {
+    0: 'Acoustic Grand Piano',
+    11: 'Vibraphone',
+    12: 'Marimba',
+    13: 'Xylophone',
+    14: 'Tubular Bells',
+    15: 'Dulcimer',
+    // ... etc
+  };
+  return instruments[program] || `Program ${program}`;
+}

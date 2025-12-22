@@ -1,0 +1,32 @@
+{
+  "name": "tiktok-3d-video-generator",
+  "version": "2.0.0",
+  "type": "module",
+  "description": "Système industrialisable de génération de vidéos TikTok 3D synchronisées avec la musique via Blender",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "NODE_ENV=development node src/index.js",
+    "render:one": "node src/index.js --single",
+    "batch": "node src/index.js --batch",
+    "setup": "node src/setup.js"
+  },
+  "keywords": [
+    "tiktok",
+    "blender",
+    "3d-video",
+    "music-sync",
+    "automation",
+    "batch-processing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "midi-parser-js": "^4.0.4",
+    "node-fetch": "^2.7.0",
+    "three": "^0.182.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
