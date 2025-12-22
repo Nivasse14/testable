@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Viral Ball Ramp</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #0a0a0a; font-family: Arial, sans-serif; }
+        canvas { display: block; }
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #ffc356;
+        }
+        button {
+            background: #ffc356;
+            color: #000;
+            border: none;
+            padding: 12px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        button:hover { background: #ffb020; }
+        h3 { margin: 0 0 10px 0; color: #ffc356; }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <h3>🎨 Viral Ball Ramp</h3>
+        <button id="dropBtn">💥 Drop Balls</button>
+        <button id="resetBtn">🔄 Reset</button>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
+
+        // Scene - SIDE VIEW for TikTok
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a2332); // Dark blue gradient
+
+        const camera = new THREE.PerspectiveCamera(50, 9 / 16, 0.1, 1000); // 9:16 TikTok ratio
+        camera.position.set(15, 8, 0); // SIDE VIEW
+        camera.lookAt(0, 5, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(540, 960); // TikTok dimensions
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting - Viral aesthetic
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        keyLight.position.set(10, 15, 5);
+        keyLight.castShadow = true;
+        scene.add(keyLight);
+
+        const fillLight = new THREE.DirectionalLight(0x4a90e2, 0.8);
+        fillLight.position.set(-10, 10, -5);
+        scene.add(fillLight);
+
+        const rimLight = new THREE.DirectionalLight(0xff6b9d, 1.2);
+        rimLight.position.set(0, 5, -10);
+        scene.add(rimLight);
+
+        // Physics
+        const world = new CANNON.World({
+            gravity: new CANNON.Vec3(0, -12, 0)
+        });
+
+        const rampMaterial = new CANNON.Material('ramp');
+        const ballMaterial = new CANNON.Material('ball');
+        const contact = new CANNON.ContactMaterial(rampMaterial, ballMaterial, {
+            friction: 0.1,
+            restitution: 0.85
+        });
+        world.addContactMaterial(contact);
+
+        // CURVED RAMP - Multiple connected segments
+        const rampSegments = [];
+        const rampBodies = [];
+        const numSegments = 25;
+
+        for (let i = 0; i < numSegments; i++) {
+            const t = i / numSegments;
+            
+            // Curved path - S-shape descent
+            const x = 0;
+            const y = 15 - t * 20 - Math.sin(t * Math.PI * 2) * 2;
+            const z = Math.sin(t * Math.PI * 4) * 3; // Wavy left-right
+            
+            const nextT = (i + 1) / numSegments;
+            const nextY = 15 - nextT * 20 - Math.sin(nextT * Math.PI * 2) * 2;
+            const nextZ = Math.sin(nextT * Math.PI * 4) * 3;
+            
+            // Platform dimensions
+            const width = 4;
+            const depth = 1.2;
+            const height = 0.3;
+            
+            // Rotation to follow curve
+            const angleZ = Math.atan2(nextY - y, depth);
+            
+            // Visual mesh - Colorful gradient
+            const hue = t * 360;
+            const platformGeom = new THREE.BoxGeometry(width, height, depth);
+            const platformMat = new THREE.MeshStandardMaterial({
+                color: new THREE.Color(`hsl(${hue}, 70%, 60%)`),
+                metalness: 0.4,
+                roughness: 0.3
+            });
+            const platformMesh = new THREE.Mesh(platformGeom, platformMat);
+            platformMesh.position.set(x, y, z);
+            platformMesh.rotation.x = angleZ;
+            platformMesh.castShadow = true;
+            platformMesh.receiveShadow = true;
+            scene.add(platformMesh);
+            rampSegments.push(platformMesh);
+
+            // Glowing edges
+            const edgeGeom = new THREE.BoxGeometry(width + 0.1, 0.1, depth);
+            const edgeMat = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                emissive: new THREE.Color(`hsl(${hue}, 100%, 70%)`),
+                emissiveIntensity: 0.5
+            });
+            const edgeMesh = new THREE.Mesh(edgeGeom, edgeMat);
+            edgeMesh.position.set(x, y - height/2, z);
+            edgeMesh.rotation.x = angleZ;
+            scene.add(edgeMesh);
+
+            // Physics
+            const shape = new CANNON.Box(new CANNON.Vec3(width/2, height/2, depth/2));
+            const body = new CANNON.Body({ mass: 0, material: rampMaterial });
+            body.addShape(shape);
+            body.position.set(x, y, z);
+            const quat = new CANNON.Quaternion();
+            quat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), angleZ);
+            body.quaternion.copy(quat);
+            world.addBody(body);
+            rampBodies.push(body);
+        }
+
+        // BALLS - Multiple colored balls
+        const balls = [];
+        const ballBodies = [];
+        const ballColors = [
+            0x4ecdc4, // Cyan
+            0xff6b9d, // Pink
+            0xffe66d, // Yellow
+            0x95e1d3, // Mint
+            0xf38181, // Coral
+        ];
+
+        function createBall(delay = 0) {
+            setTimeout(() => {
+                const ballRadius = 0.4;
+                const color = ballColors[balls.length % ballColors.length];
+                
+                const ballGeom = new THREE.SphereGeometry(ballRadius, 32, 32);
+                const ballMat = new THREE.MeshStandardMaterial({
+                    color: color,
+                    metalness: 0.6,
+                    roughness: 0.2,
+                    emissive: color,
+                    emissiveIntensity: 0.3
+                });
+                const ballMesh = new THREE.Mesh(ballGeom, ballMat);
+                ballMesh.castShadow = true;
+                scene.add(ballMesh);
+                balls.push(ballMesh);
+
+                const shape = new CANNON.Sphere(ballRadius);
+                const body = new CANNON.Body({
+                    mass: 1,
+                    shape: shape,
+                    material: ballMaterial
+                });
+                body.position.set(0, 16, Math.random() * 2 - 1);
+                body.velocity.set(0, 0, 0);
+                world.addBody(body);
+                ballBodies.push(body);
+            }, delay);
+        }
+
+        // Ground
+        const groundGeom = new THREE.PlaneGeometry(30, 30);
+        const groundMat = new THREE.MeshStandardMaterial({
+            color: 0x2a3f5f,
+            metalness: 0.3,
+            roughness: 0.7
+        });
+        const groundMesh = new THREE.Mesh(groundGeom, groundMat);
+        groundMesh.rotation.x = -Math.PI / 2;
+        groundMesh.position.y = -6;
+        groundMesh.receiveShadow = true;
+        scene.add(groundMesh);
+
+        const groundShape = new CANNON.Plane();
+        const groundBody = new CANNON.Body({ mass: 0, material: rampMaterial });
+        groundBody.addShape(groundShape);
+        groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+        groundBody.position.set(0, -6, 0);
+        world.addBody(groundBody);
+
+        // Particles for extra visual flair
+        const particlesGeom = new THREE.BufferGeometry();
+        const particleCount = 100;
+        const positions = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount; i++) {
+            positions[i * 3] = (Math.random() - 0.5) * 20;
+            positions[i * 3 + 1] = Math.random() * 20;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 10;
+        }
+        particlesGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const particlesMat = new THREE.PointsMaterial({
+            color: 0xffffff,
+            size: 0.05,
+            transparent: true,
+            opacity: 0.6
+        });
+        const particlesMesh = new THREE.Points(particlesGeom, particlesMat);
+        scene.add(particlesMesh);
+
+        // Controls
+        document.getElementById('dropBtn').addEventListener('click', () => {
+            // Drop 5 balls with delays
+            for (let i = 0; i < 5; i++) {
+                createBall(i * 300);
+            }
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            balls.forEach(b => scene.remove(b));
+            ballBodies.forEach(b => world.removeBody(b));
+            balls.length = 0;
+            ballBodies.length = 0;
+        });
+
+        // Start with 3 balls
+        createBall(0);
+        createBall(400);
+        createBall(800);
+
+        // Animation
+        const fixedTimeStep = 1 / 60;
+        let lastTime = performance.now() / 1000;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const time = performance.now() / 1000;
+            const deltaTime = time - lastTime;
+            lastTime = time;
+
+            world.step(fixedTimeStep, deltaTime, 3);
+
+            // Update balls
+            balls.forEach((ball, i) => {
+                if (ballBodies[i]) {
+                    ball.position.copy(ballBodies[i].position);
+                    ball.quaternion.copy(ballBodies[i].quaternion);
+                }
+            });
+
+            // Gentle camera sway
+            camera.position.y = 8 + Math.sin(time * 0.3) * 0.5;
+
+            // Rotate particles
+            particlesMesh.rotation.y += 0.0005;
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            renderer.setSize(540, 960);
+        });
+    </script>
+</body>
+</html>

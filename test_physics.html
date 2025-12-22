@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Physics Test - Bouncing Ball</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: #0a0a0a; 
+            font-family: Arial, sans-serif;
+        }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 8px;
+        }
+        button {
+            background: #ffc356;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 5px;
+        }
+        button:hover { background: #ffdd88; }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <strong>⚽ Physics Test</strong><br>
+        <span id="status">Chargement...</span><br>
+        <span id="physics">Physics: OFF</span>
+    </div>
+    
+    <div id="controls">
+        <button id="dropBall">💥 Lâcher la balle</button>
+        <button id="launch">🚀 Lancer</button>
+        <button id="reset">🔄 Reset</button>
+    </div>
+    
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Import Cannon-ES from unpkg (supports ES modules)
+        const CANNON = await import('https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js');
+
+        const status = document.getElementById('status');
+        const physicsStatus = document.getElementById('physics');
+
+        // Scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a0a);
+        
+        const camera = new THREE.PerspectiveCamera(50, 1080 / 1920, 0.1, 1000);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(540, 960);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // Physics World
+        const world = new CANNON.World();
+        world.gravity.set(0, -15, 0); // Stronger gravity for bouncy effect
+        world.broadphase = new CANNON.NaiveBroadphase();
+        world.solver.iterations = 10;
+        
+        // Physics material - bouncy!
+        const bouncyMaterial = new CANNON.Material('bouncy');
+        const bouncyContact = new CANNON.ContactMaterial(
+            bouncyMaterial,
+            bouncyMaterial,
+            {
+                friction: 0.3,
+                restitution: 0.7 // High bounce
+            }
+        );
+        world.addContactMaterial(bouncyContact);
+
+        // Lights
+        const keyLight = new THREE.DirectionalLight(0xffeebb, 3);
+        keyLight.position.set(6, 15, -10);
+        keyLight.castShadow = true;
+        keyLight.shadow.camera.left = -10;
+        keyLight.shadow.camera.right = 10;
+        keyLight.shadow.camera.top = 10;
+        keyLight.shadow.camera.bottom = -10;
+        scene.add(keyLight);
+
+        const rimLight = new THREE.DirectionalLight(0xffcc66, 2);
+        rimLight.position.set(-8, 12, -8);
+        scene.add(rimLight);
+
+        const ambient = new THREE.AmbientLight(0x404040, 0.6);
+        scene.add(ambient);
+
+        // Golden ball
+        const ballRadius = 0.7;
+        const ballGeometry = new THREE.SphereGeometry(ballRadius, 32, 32);
+        const ballMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffc356,
+            metalness: 1.0,
+            roughness: 0.05,
+            emissive: 0x664400,
+            emissiveIntensity: 0.3
+        });
+        const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+        ball.castShadow = true;
+        ball.receiveShadow = true;
+        scene.add(ball);
+
+        // Physics ball body
+        const ballShape = new CANNON.Sphere(ballRadius);
+        const ballBody = new CANNON.Body({
+            mass: 1,
+            shape: ballShape,
+            material: bouncyMaterial,
+            linearDamping: 0.1,
+            angularDamping: 0.3
+        });
+        world.addBody(ballBody);
+
+        // Physics bodies for level platforms
+        const physicsBodies = [];
+        const debugMeshes = []; // Visual debug
+        
+        // Load level
+        let levelCenter = new THREE.Vector3(0, 0, 0);
+        let levelLoaded = false;
+        
+        const loader = new GLTFLoader();
+        loader.load(
+            'assets/leo_10s_crescendo_level.glb',
+            (gltf) => {
+                const level = gltf.scene;
+                
+                // Enable shadows
+                level.traverse((node) => {
+                    if (node.isMesh) {
+                        node.castShadow = true;
+                        node.receiveShadow = true;
+                    }
+                });
+                
+                scene.add(level);
+                
+                // Get level bounds
+                const box = new THREE.Box3().setFromObject(level);
+                box.getCenter(levelCenter);
+                const size = new THREE.Vector3();
+                box.getSize(size);
+                
+                console.log('Level bounds:', {
+                    center: levelCenter,
+                    size: size,
+                    min: box.min,
+                    max: box.max
+                });
+                
+                // Create multiple platform collision boxes based on level geometry
+                // Analyze the level mesh to create platforms
+                level.traverse((node) => {
+                    if (node.isMesh && node.geometry) {
+                        const geo = node.geometry;
+                        geo.computeBoundingBox();
+                        
+                        if (!geo.boundingBox) return;
+                        
+                        const localSize = new THREE.Vector3();
+                        geo.boundingBox.getSize(localSize);
+                        const localCenter = new THREE.Vector3();
+                        geo.boundingBox.getCenter(localCenter);
+                        
+                        // Transform to world space
+                        const worldCenter = localCenter.clone();
+                        node.localToWorld(worldCenter);
+                        
+                        // Only create collision for significant platforms (not tiny details)
+                        if (localSize.x > 0.5 && localSize.z > 0.5) {
+                            // Create physics box
+                            const shape = new CANNON.Box(new CANNON.Vec3(
+                                localSize.x / 2,
+                                localSize.y / 2,
+                                localSize.z / 2
+                            ));
+                            
+                            const body = new CANNON.Body({
+                                mass: 0,
+                                shape: shape,
+                                material: bouncyMaterial
+                            });
+                            
+                            body.position.set(worldCenter.x, worldCenter.y, worldCenter.z);
+                            
+                            // Apply rotation
+                            const worldQuat = new THREE.Quaternion();
+                            node.getWorldQuaternion(worldQuat);
+                            body.quaternion.set(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w);
+                            
+                            world.addBody(body);
+                            physicsBodies.push(body);
+                            
+                            // Debug visualization (wireframe)
+                            const debugGeo = new THREE.BoxGeometry(localSize.x, localSize.y, localSize.z);
+                            const debugMat = new THREE.MeshBasicMaterial({
+                                color: 0x00ff00,
+                                wireframe: true,
+                                transparent: true,
+                                opacity: 0.3
+                            });
+                            const debugMesh = new THREE.Mesh(debugGeo, debugMat);
+                            debugMesh.position.copy(worldCenter);
+                            debugMesh.quaternion.copy(worldQuat);
+                            scene.add(debugMesh);
+                            debugMeshes.push(debugMesh);
+                        }
+                    }
+                });
+                
+                // Add a large ground plane as fallback
+                const groundShape = new CANNON.Plane();
+                const groundBody = new CANNON.Body({
+                    mass: 0,
+                    shape: groundShape,
+                    material: bouncyMaterial
+                });
+                groundBody.position.set(0, box.min.y - 1, 0);
+                groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+                world.addBody(groundBody);
+                physicsBodies.push(groundBody);
+                
+                // Position ball above level
+                ballBody.position.set(levelCenter.x, levelCenter.y + 8, levelCenter.z);
+                ball.position.copy(ballBody.position);
+                
+                // Camera
+                camera.position.set(levelCenter.x + 8, levelCenter.y + 8, levelCenter.z - 10);
+                camera.lookAt(levelCenter);
+                
+                const controls = new OrbitControls(camera, renderer.domElement);
+                controls.target.copy(levelCenter);
+                controls.update();
+                
+                levelLoaded = true;
+                status.innerHTML = `✓ Niveau chargé<br>Plateformes: ${physicsBodies.length}<br><small>Vert = hitboxes</small>`;
+                physicsStatus.textContent = `Physics: ACTIVE (${physicsBodies.length} bodies)`;
+                
+                console.log('Physics bodies created:', physicsBodies.length);
+            },
+            (progress) => {
+                const percent = (progress.loaded / progress.total * 100).toFixed(0);
+                status.textContent = `Chargement... ${percent}%`;
+            },
+            (error) => {
+                status.innerHTML = `❌ Erreur<br><small>${error.message}</small>`;
+                console.error(error);
+            }
+        );
+
+        // Controls
+        document.getElementById('dropBall').addEventListener('click', () => {
+            ballBody.position.set(levelCenter.x, levelCenter.y + 10, levelCenter.z);
+            ballBody.velocity.set(0, 0, 0);
+            ballBody.angularVelocity.set(0, 0, 0);
+        });
+
+        document.getElementById('launch').addEventListener('click', () => {
+            ballBody.velocity.set(
+                (Math.random() - 0.5) * 10,
+                15,
+                (Math.random() - 0.5) * 10
+            );
+        });
+
+        document.getElementById('reset').addEventListener('click', () => {
+            ballBody.position.set(levelCenter.x, levelCenter.y + 8, levelCenter.z);
+            ballBody.velocity.set(0, 0, 0);
+            ballBody.angularVelocity.set(0, 0, 0);
+        });
+
+        // Animation loop
+        const clock = new THREE.Clock();
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (levelLoaded) {
+                const delta = clock.getDelta();
+                
+                // Step physics
+                world.step(1/60, delta, 3);
+                
+                // Update ball mesh from physics
+                ball.position.copy(ballBody.position);
+                ball.quaternion.copy(ballBody.quaternion);
+                
+                // Camera follow ball smoothly
+                const targetCamPos = new THREE.Vector3(
+                    ball.position.x + 8,
+                    ball.position.y + 5,
+                    ball.position.z - 10
+                );
+                camera.position.lerp(targetCamPos, 0.02);
+                camera.lookAt(ball.position);
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        animate();
+    </script>
+</body>
+</html>

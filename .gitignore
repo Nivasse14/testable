@@ -11,3 +11,4 @@ frames/
 cache/
 data/*.json
 !data/.gitkeep
+soundfonts/

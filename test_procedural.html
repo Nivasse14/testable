@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Procedural Levels - Physics Test</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #0a0a0a; font-family: Arial, sans-serif; }
+        canvas { display: block; }
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #ffc356;
+        }
+        button {
+            background: #ffc356;
+            color: #000;
+            border: none;
+            padding: 12px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        button:hover { background: #ffb020; }
+        #levelButtons { margin-bottom: 15px; }
+        #levelButtons button { margin: 3px; }
+        h3 { margin: 0 0 10px 0; color: #ffc356; }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <h3>🎮 Procedural Physics Test</h3>
+        <div id="levelButtons">
+            <button data-level="spiral">🌀 Spiral</button>
+            <button data-level="zigzag">⚡ Zigzag</button>
+            <button data-level="wave">🌊 Wave</button>
+        </div>
+        <button id="dropBtn">💥 Drop Ball</button>
+        <button id="launchBtn">🚀 Launch Ball</button>
+        <button id="resetBtn">🔄 Reset</button>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a0a);
+
+        const camera = new THREE.PerspectiveCamera(
+            50,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            1000
+        );
+        camera.position.set(0, 8, 15);
+        camera.lookAt(0, 5, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting - EEVEE style
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        sunLight.position.set(5, 15, 5);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        scene.add(sunLight);
+
+        const fillLight = new THREE.DirectionalLight(0x5588ff, 0.5);
+        fillLight.position.set(-5, 10, -5);
+        scene.add(fillLight);
+
+        const rimLight = new THREE.DirectionalLight(0xffc356, 0.8);
+        rimLight.position.set(0, 5, -10);
+        scene.add(rimLight);
+
+        // Materials
+        const blackMaterial = new THREE.MeshStandardMaterial({
+            color: 0x1a1a1a,
+            metalness: 0.8,
+            roughness: 0.2
+        });
+
+        const goldMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffc356,
+            metalness: 1.0,
+            roughness: 0.1,
+            emissive: 0x664400,
+            emissiveIntensity: 0.2
+        });
+
+        // Physics world
+        const world = new CANNON.World({
+            gravity: new CANNON.Vec3(0, -9.82, 0) // Realistic gravity
+        });
+        world.solver.iterations = 10;
+        world.solver.tolerance = 0.001;
+
+        const bouncyMaterial = new CANNON.Material('bouncy');
+        const bouncyContactMaterial = new CANNON.ContactMaterial(
+            bouncyMaterial,
+            bouncyMaterial,
+            { 
+                friction: 0.3, 
+                restitution: 0.9
+            }
+        );
+        world.addContactMaterial(bouncyContactMaterial);
+
+        // Ground plane fallback
+        const groundShape = new CANNON.Plane();
+        const groundBody = new CANNON.Body({ mass: 0, material: bouncyMaterial });
+        groundBody.addShape(groundShape);
+        groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+        groundBody.position.set(0, -5, 0);
+        world.addBody(groundBody);
+
+        // Ball
+        const ballRadius = 0.3;
+        const ballGeometry = new THREE.SphereGeometry(ballRadius, 32, 32);
+        const ballMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffc356,
+            metalness: 1.0,
+            roughness: 0.1,
+            emissive: 0xffc356,
+            emissiveIntensity: 0.3
+        });
+        const ballMesh = new THREE.Mesh(ballGeometry, ballMaterial);
+        ballMesh.castShadow = true;
+        scene.add(ballMesh);
+
+        const ballShape = new CANNON.Sphere(ballRadius);
+        const ballBody = new CANNON.Body({
+            mass: 1,
+            shape: ballShape,
+            material: bouncyMaterial,
+            linearDamping: 0.1,
+            angularDamping: 0.3
+        });
+        world.addBody(ballBody);
+
+        // Level data
+        let currentLevelMeshes = [];
+        let currentLevelBodies = [];
+        let debugWireframes = [];
+
+        // SPIRAL STAIRCASE
+        function createSpiral() {
+            const meshes = [];
+            const bodies = [];
+            const numSteps = 20;
+            const radius = 3;
+            const heightStep = 0.5;
+            
+            for (let i = 0; i < numSteps; i++) {
+                const angle = (i / numSteps) * Math.PI * 4;
+                const x = Math.cos(angle) * radius;
+                const z = Math.sin(angle) * radius;
+                const y = (numSteps - i) * heightStep;
+                
+                // Platform mesh
+                const platform = new THREE.Mesh(
+                    new THREE.BoxGeometry(2, 0.2, 1.5),
+                    blackMaterial.clone()
+                );
+                platform.position.set(x, y, z);
+                platform.rotation.y = angle;
+                platform.castShadow = true;
+                platform.receiveShadow = true;
+                scene.add(platform);
+                meshes.push(platform);
+                
+                // Gold border
+                const border = new THREE.Mesh(
+                    new THREE.BoxGeometry(2.1, 0.15, 1.6),
+                    goldMaterial.clone()
+                );
+                border.position.set(x, y - 0.15, z);
+                border.rotation.y = angle;
+                border.castShadow = true;
+                scene.add(border);
+                meshes.push(border);
+                
+                // Physics body for platform only (EXACT size: 2x0.2x1.5)
+                const shape = new CANNON.Box(new CANNON.Vec3(1.0, 0.1, 0.75));
+                const body = new CANNON.Body({
+                    mass: 0,
+                    shape: shape,
+                    material: bouncyMaterial
+                });
+                body.position.set(x, y, z);
+                body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), angle);
+                world.addBody(body);
+                bodies.push(body);
+                
+                // Debug wireframe
+                const wireGeo = new THREE.BoxGeometry(2, 0.2, 1.5);
+                const wireframe = new THREE.LineSegments(
+                    new THREE.EdgesGeometry(wireGeo),
+                    new THREE.LineBasicMaterial({ color: 0x00ff00, opacity: 0.5, transparent: true })
+                );
+                wireframe.position.set(x, y, z);
+                wireframe.rotation.y = angle;
+                scene.add(wireframe);
+                debugWireframes.push(wireframe);
+            }
+            
+            console.log(`✓ Spiral: ${numSteps} platforms loaded`);
+            return { meshes, bodies };
+        }
+
+        // ZIGZAG CASCADE
+        function createZigzag() {
+            const meshes = [];
+            const bodies = [];
+            const numPlatforms = 12;
+            const spacing = 2.5;
+            
+            for (let i = 0; i < numPlatforms; i++) {
+                const direction = i % 2 === 0 ? 1 : -1;
+                const x = direction * (2 + Math.random() * 1);
+                const y = (numPlatforms - i) * 1.2;
+                const z = i * spacing - (numPlatforms * spacing) / 2;
+                
+                // Platform
+                const platform = new THREE.Mesh(
+                    new THREE.BoxGeometry(2.5, 0.3, 2),
+                    blackMaterial.clone()
+                );
+                platform.position.set(x, y, z);
+                platform.castShadow = true;
+                platform.receiveShadow = true;
+                scene.add(platform);
+                meshes.push(platform);
+                
+                // Gold trim
+                const edges = new THREE.Mesh(
+                    new THREE.BoxGeometry(2.6, 0.25, 2.1),
+                    goldMaterial.clone()
+                );
+                edges.position.set(x, y - 0.2, z);
+                edges.castShadow = true;
+                scene.add(edges);
+                meshes.push(edges);
+                
+                // Physics (EXACT size: 2.5x0.3x2)
+                const shape = new CANNON.Box(new CANNON.Vec3(1.25, 0.15, 1.0));
+                const body = new CANNON.Body({
+                    mass: 0,
+                    shape: shape,
+                    material: bouncyMaterial
+                });
+                body.position.set(x, y, z);
+                world.addBody(body);
+                bodies.push(body);
+                
+                // Debug wireframe
+                const wireGeo = new THREE.BoxGeometry(2.5, 0.3, 2);
+                const wireframe = new THREE.LineSegments(
+                    new THREE.EdgesGeometry(wireGeo),
+                    new THREE.LineBasicMaterial({ color: 0x00ff00, opacity: 0.5, transparent: true })
+                );
+                wireframe.position.set(x, y, z);
+                scene.add(wireframe);
+                debugWireframes.push(wireframe);
+            }
+            
+            console.log(`✓ Zigzag: ${numPlatforms} platforms loaded`);
+            return { meshes, bodies };
+        }
+
+        // WAVE PARKOUR
+        function createWave() {
+            const meshes = [];
+            const bodies = [];
+            const numPlatforms = 15;
+            
+            for (let i = 0; i < numPlatforms; i++) {
+                const t = i / numPlatforms;
+                const angle = t * Math.PI * 3;
+                
+                const x = Math.sin(angle) * 3;
+                const y = 8 - t * 12 + Math.cos(angle * 2) * 2;
+                const z = i * 1.5 - 10;
+                
+                // Platform
+                const platform = new THREE.Mesh(
+                    new THREE.BoxGeometry(2, 0.25, 1.5),
+                    blackMaterial.clone()
+                );
+                platform.position.set(x, y, z);
+                platform.rotation.z = Math.sin(angle) * 0.2;
+                platform.castShadow = true;
+                platform.receiveShadow = true;
+                scene.add(platform);
+                meshes.push(platform);
+                
+                // Gold accent
+                const accent = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.3, 0.3, 1.6),
+                    goldMaterial.clone()
+                );
+                accent.position.set(x, y + 0.15, z);
+                accent.castShadow = true;
+                scene.add(accent);
+                meshes.push(accent);
+                
+                // Physics (EXACT size: 2x0.25x1.5)
+                const shape = new CANNON.Box(new CANNON.Vec3(1.0, 0.125, 0.75));
+                const body = new CANNON.Body({
+                    mass: 0,
+                    shape: shape,
+                    material: bouncyMaterial
+                });
+                body.position.set(x, y, z);
+                const rotQuat = new CANNON.Quaternion();
+                rotQuat.setFromAxisAngle(new CANNON.Vec3(0, 0, 1), Math.sin(angle) * 0.2);
+                body.quaternion.copy(rotQuat);
+                world.addBody(body);
+                bodies.push(body);
+                
+                // Debug wireframe
+                const wireGeo = new THREE.BoxGeometry(2, 0.25, 1.5);
+                const wireframe = new THREE.LineSegments(
+                    new THREE.EdgesGeometry(wireGeo),
+                    new THREE.LineBasicMaterial({ color: 0x00ff00, opacity: 0.5, transparent: true })
+                );
+                wireframe.position.set(x, y, z);
+                wireframe.rotation.z = Math.sin(angle) * 0.2;
+                scene.add(wireframe);
+                debugWireframes.push(wireframe);
+            }
+            
+            console.log(`✓ Wave: ${numPlatforms} platforms loaded`);
+            return { meshes, bodies };
+        }
+
+        // Level switching
+        function loadLevel(levelName) {
+            // Clear current level
+            currentLevelMeshes.forEach(mesh => scene.remove(mesh));
+            currentLevelBodies.forEach(body => world.removeBody(body));
+            debugWireframes.forEach(wire => scene.remove(wire));
+            currentLevelMeshes = [];
+            currentLevelBodies = [];
+            debugWireframes = [];
+
+            // Load new level
+            let result;
+            if (levelName === 'spiral') result = createSpiral();
+            else if (levelName === 'zigzag') result = createZigzag();
+            else if (levelName === 'wave') result = createWave();
+
+            currentLevelMeshes = result.meshes;
+            currentLevelBodies = result.bodies;
+
+            // Reset ball
+            ballBody.position.set(0, 12, 0);
+            ballBody.velocity.set(0, 0, 0);
+            ballBody.angularVelocity.set(0, 0, 0);
+        }
+
+        // Controls
+        document.querySelectorAll('[data-level]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                loadLevel(btn.dataset.level);
+            });
+        });
+
+        document.getElementById('dropBtn').addEventListener('click', () => {
+            ballBody.position.set(0, 12, 0);
+            ballBody.velocity.set(0, 0, 0);
+            ballBody.angularVelocity.set(0, 0, 0);
+        });
+
+        document.getElementById('launchBtn').addEventListener('click', () => {
+            ballBody.velocity.set(
+                (Math.random() - 0.5) * 10,
+                5,
+                (Math.random() - 0.5) * 10
+            );
+        });
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            ballBody.position.set(0, 12, 0);
+            ballBody.velocity.set(0, 0, 0);
+            ballBody.angularVelocity.set(0, 0, 0);
+        });
+
+        // Load default level
+        loadLevel('spiral');
+
+        // Animation loop
+        const clock = new THREE.Clock();
+        const fixedTimeStep = 1 / 120; // 120 Hz physics
+        let lastTime = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const time = performance.now() / 1000;
+            const deltaTime = time - lastTime;
+            lastTime = time;
+
+            // Fixed timestep for stable physics
+            world.step(fixedTimeStep, deltaTime, 5);
+
+            // Update ball
+            ballMesh.position.copy(ballBody.position);
+            ballMesh.quaternion.copy(ballBody.quaternion);
+
+            // Camera follow
+            camera.position.x += (ballBody.position.x - camera.position.x) * 0.02;
+            camera.position.y += (ballBody.position.y + 8 - camera.position.y) * 0.02;
+            camera.lookAt(ballBody.position.x, ballBody.position.y, ballBody.position.z);
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

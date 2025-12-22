@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Test Meshy GLB</title>
+    <style>
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: #0a0a0a; 
+            font-family: Arial, sans-serif;
+        }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ffc356;
+            font-size: 24px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">⏳ Chargement du niveau Meshy...</div>
+    <div id="info" style="display:none;">
+        <strong>🎮 Test Viewer</strong><br>
+        <span id="status">Chargement...</span><br>
+        <small>Drag pour tourner • Molette pour zoom</small>
+    </div>
+    
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+    
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        const loading = document.getElementById('loading');
+        const info = document.getElementById('info');
+        const status = document.getElementById('status');
+
+        // Scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a0a);
+        scene.fog = new THREE.Fog(0x0a0a0a, 10, 50);
+        
+        // Camera - Vertical format like TikTok
+        const camera = new THREE.PerspectiveCamera(
+            50,
+            1080 / 1920, // Vertical ratio
+            0.1,
+            1000
+        );
+        
+        // Renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(540, 960); // Half size for preview
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // Lights - Luxury gold setup
+        const keyLight = new THREE.DirectionalLight(0xffeebb, 3);
+        keyLight.position.set(6, 15, -10);
+        keyLight.castShadow = true;
+        scene.add(keyLight);
+
+        const rimLight = new THREE.DirectionalLight(0xffcc66, 2);
+        rimLight.position.set(-8, 12, -8);
+        scene.add(rimLight);
+
+        const backLight = new THREE.PointLight(0xffaa44, 2, 100);
+        backLight.position.set(0, 10, 8);
+        scene.add(backLight);
+
+        const ambient = new THREE.AmbientLight(0x404040, 0.5);
+        scene.add(ambient);
+
+        // Golden ball
+        const ballGeometry = new THREE.SphereGeometry(0.7, 32, 32);
+        const ballMaterial = new THREE.MeshStandardMaterial({
+            color: 0xffc356,
+            metalness: 1.0,
+            roughness: 0.05,
+            emissive: 0x664400,
+            emissiveIntensity: 0.3
+        });
+        const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+        ball.castShadow = true;
+        scene.add(ball);
+
+        // Load level
+        const loader = new GLTFLoader();
+        const glbPath = '../assets/leo_10s_crescendo_level.glb';
+        
+        status.textContent = `Chargement ${glbPath}...`;
+        
+        loader.load(
+            glbPath,
+            (gltf) => {
+                const level = gltf.scene;
+                
+                // Enable shadows
+                level.traverse((node) => {
+                    if (node.isMesh) {
+                        node.castShadow = true;
+                        node.receiveShadow = true;
+                    }
+                });
+                
+                scene.add(level);
+                
+                // Calculate center and bounds
+                const box = new THREE.Box3().setFromObject(level);
+                const center = new THREE.Vector3();
+                const size = new THREE.Vector3();
+                box.getCenter(center);
+                box.getSize(size);
+                
+                // Position ball above level
+                ball.position.set(center.x, center.y + 3, center.z);
+                
+                // Position camera
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const camDistance = maxDim * 2;
+                camera.position.set(
+                    center.x + camDistance * 0.5,
+                    center.y + camDistance * 0.3,
+                    center.z - camDistance * 0.8
+                );
+                camera.lookAt(center);
+                
+                // Setup controls
+                const controls = new OrbitControls(camera, renderer.domElement);
+                controls.target.copy(center);
+                controls.update();
+                
+                loading.style.display = 'none';
+                info.style.display = 'block';
+                status.innerHTML = `✓ Niveau chargé<br>
+                    Taille: ${size.x.toFixed(1)} × ${size.y.toFixed(1)} × ${size.z.toFixed(1)}<br>
+                    Objets: ${level.children.length}`;
+                
+                console.log('Level loaded:', {
+                    center,
+                    size,
+                    objects: level.children.length
+                });
+                
+                // Animation loop
+                let time = 0;
+                function animate() {
+                    requestAnimationFrame(animate);
+                    
+                    time += 0.016;
+                    
+                    // Gentle ball bounce
+                    ball.position.y = center.y + 3 + Math.sin(time * 2) * 0.3;
+                    
+                    // Slow rotation of level for preview
+                    level.rotation.y = time * 0.1;
+                    
+                    renderer.render(scene, camera);
+                }
+                animate();
+            },
+            (progress) => {
+                const percent = (progress.loaded / progress.total * 100).toFixed(0);
+                status.textContent = `Chargement ${glbPath}... ${percent}%`;
+            },
+            (error) => {
+                loading.style.display = 'none';
+                info.style.display = 'block';
+                status.innerHTML = `❌ Erreur de chargement<br><small>${error.message}</small>`;
+                console.error('Load error:', error);
+            }
+        );
+    </script>
+</body>
+</html>
