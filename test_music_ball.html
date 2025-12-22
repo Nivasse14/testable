@@ -65,11 +65,18 @@
     
     <div id="controls">
         <h3 style="margin: 0 0 10px 0; color: #00ffff;">🎵 Music Ball</h3>
+        <button id="audioBtn" style="background: #27ae60;">🔊 Son ON</button>
         <button id="fullscreenBtn" style="background: #4a90e2;">⛶ Plein écran</button>
         <button id="editModeBtn" style="background: #ff8c00;">✋ Mode Édition</button>
         <button id="wireframeBtn" style="background: #9b59b6;">□ Wireframe</button>
         <button id="dropBtn">▶ Drop</button>
         <button id="resetBtn">↻ Reset</button>
+        
+        <div id="audioInfo" style="margin-top: 10px; padding: 8px; background: rgba(39, 174, 96, 0.2); border-radius: 5px; font-size: 12px;">
+            <b>🎵 Note-by-Note Reveal</b><br>
+            Chaque rebond = 1 note de xylophone<br>
+            Les couleurs = hauteur de note
+        </div>
         
         <div id="editHelp" style="display: none; margin-top: 10px; padding: 10px; background: rgba(255,140,0,0.2); border-radius: 5px; font-size: 12px;">
             <b>Clique</b> sur une plateforme (elle brille plus fort)<br>
@@ -159,6 +166,59 @@
         import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
         import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
         import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // ========== WEB AUDIO API - Note-by-Note Reveal ==========
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const masterGain = audioContext.createGain();
+        masterGain.gain.value = 0.5; // Volume général
+        masterGain.connect(audioContext.destination);
+
+        // Mapping MIDI note → Fréquence (Hz)
+        function midiToFreq(note) {
+            return 440 * Math.pow(2, (note - 69) / 12);
+        }
+
+        // Mapping Note MIDI → Couleur (gamme chromatique)
+        const NOTES_TO_COLORS = {
+            60: 0xff6b6b, // C (Do) - Rouge
+            61: 0xff8a6b, // C# - Rouge-orange
+            62: 0xffa500, // D (Ré) - Orange
+            63: 0xffc46b, // D# - Jaune-orange
+            64: 0xffff00, // E (Mi) - Jaune
+            65: 0x98fb98, // F (Fa) - Vert clair
+            66: 0x6bffb4, // F# - Vert-cyan
+            67: 0x4ecdc4, // G (Sol) - Cyan
+            68: 0x6ba3ff, // G# - Bleu clair
+            69: 0x4169e1, // A (La) - Bleu roi
+            70: 0x8a6bff, // A# - Violet clair
+            71: 0x9b59b6, // B (Si) - Violet
+        };
+
+        // Jouer une note (oscillateur simple)
+        function playNote(midiNote, duration = 0.3, velocity = 1.0) {
+            const freq = midiToFreq(midiNote);
+            const now = audioContext.currentTime;
+            
+            // Oscillateur (son de xylophone = triangle + attack rapide)
+            const osc = audioContext.createOscillator();
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+            
+            // Enveloppe ADSR (Attack-Decay-Sustain-Release)
+            const noteGain = audioContext.createGain();
+            noteGain.gain.value = 0;
+            noteGain.gain.linearRampToValueAtTime(velocity * 0.8, now + 0.01); // Attack 10ms
+            noteGain.gain.exponentialRampToValueAtTime(velocity * 0.3, now + 0.1); // Decay
+            noteGain.gain.exponentialRampToValueAtTime(0.01, now + duration); // Release
+            
+            osc.connect(noteGain);
+            noteGain.connect(masterGain);
+            
+            osc.start(now);
+            osc.stop(now + duration);
+            
+            return osc;
+        }
 
         // Scene - TikTok 9:16 format
         const scene = new THREE.Scene();
@@ -528,6 +588,7 @@
             const mesh = new THREE.Mesh(geom, mat);
             mesh.position.set(x, y, z);
             mesh.userData.shapeType = type;
+            mesh.userData.midiNote = null; // Sera assigné si mode MIDI
             if (rotation !== 0) {
                 mesh.rotation.z = rotation;
             }
@@ -546,6 +607,7 @@
             const body = new CANNON.Body({ mass: 0, material: platformMaterial });
             body.addShape(shape);
             body.position.set(x, y, z);
+            body.userData = { platformIndex: platforms.length - 1 }; // Link to platform
             if (rotation !== 0) {
                 const quat = new CANNON.Quaternion();
                 quat.setFromAxisAngle(new CANNON.Vec3(0, 0, 1), rotation);
@@ -566,6 +628,9 @@
             
             // Create PERFECT ZIGZAG pattern - viral worthy!
             // 20 platforms in perfect zigzag
+            // Assign MIDI notes in ascending scale (C major pentatonic for melody)
+            const scale = [60, 62, 64, 65, 67, 69, 71, 72]; // C D E F G A B C
+            
             for (let i = 0; i < 20; i++) {
                 const y = currentStartY - i * currentSpacing;
                 
@@ -574,15 +639,21 @@
                 const x = side * currentZigzagWidth;
                 
                 const z = 1 + Math.sin(i * 0.3) * 0.3; // Slight wave for depth
-                const color = platformColors[i % platformColors.length];
+                
+                // Assign MIDI note and corresponding color
+                const midiNote = scale[i % scale.length] + Math.floor(i / scale.length) * 12; // Octave up every 8 notes
+                const colorFromNote = NOTES_TO_COLORS[midiNote % 12 + 60] || 0xffffff;
                 
                 // Every 3rd platform is a diamond for variety
-                const type = (i % 3 === 0) ? 'diamond' : 'rect';
+                const type = (i % 3 === 0) ? 'diamond' : 'circle';
                 
-                createPlatform(x, y, z, color, type);
+                createPlatform(x, y, z, colorFromNote, type);
+                
+                // Store MIDI note in platform mesh
+                platforms[platforms.length - 1].userData.midiNote = midiNote;
             }
             
-            console.log(`Platforms rebuilt: startY=${currentStartY}, spacing=${currentSpacing}, zigzag=${currentZigzagWidth}`);
+            console.log(`Platforms rebuilt with MIDI notes: startY=${currentStartY}, spacing=${currentSpacing}, zigzag=${currentZigzagWidth}`);
         }
         
         // Initial build
@@ -663,6 +734,71 @@
             console.log(`Drop: velX=${currentVelX}, rest=${currentRestitution}, fric=${currentFriction}, grav=${currentGravity}`);
             console.log(`Platforms: zigzag=${currentZigzagWidth}, spacing=${currentSpacing}, startY=${currentStartY}`);
         }
+
+        // ========== COLLISION DETECTION - Note-by-Note Reveal ==========
+        const collisionHistory = new Set(); // Track which platforms were already hit
+        
+        ballBody.addEventListener('collide', (event) => {
+            const contactBody = event.body;
+            
+            // Check if it's a platform collision
+            if (contactBody.userData && contactBody.userData.platformIndex !== undefined) {
+                const platformIndex = contactBody.userData.platformIndex;
+                const platform = platforms[platformIndex];
+                
+                if (!platform || !platform.userData.midiNote) return;
+                
+                // Prevent duplicate notes on same platform (debounce)
+                const collisionKey = `${platformIndex}_${Date.now()}`;
+                if (collisionHistory.has(platformIndex)) return;
+                
+                collisionHistory.add(platformIndex);
+                setTimeout(() => collisionHistory.delete(platformIndex), 200); // 200ms debounce
+                
+                // Play the note!
+                const midiNote = platform.userData.midiNote;
+                const impactVelocity = event.contact.getImpactVelocityAlongNormal();
+                const velocity = Math.min(Math.abs(impactVelocity) / 20, 1.0); // Normalize 0-1
+                
+                playNote(midiNote, 0.4, velocity);
+                
+                // Visual feedback - brighten platform briefly
+                const light = platformLights[platformIndex];
+                if (light) {
+                    const originalIntensity = light.intensity;
+                    light.intensity = 3.0; // Bright flash
+                    setTimeout(() => {
+                        light.intensity = originalIntensity;
+                    }, 100);
+                }
+                
+                console.log(`🎵 Note ${midiNote} (Platform ${platformIndex}) - velocity: ${velocity.toFixed(2)}`);
+            }
+        });
+
+        // Audio toggle
+        let audioEnabled = true;
+        document.getElementById('audioBtn').addEventListener('click', () => {
+            audioEnabled = !audioEnabled;
+            const btn = document.getElementById('audioBtn');
+            const info = document.getElementById('audioInfo');
+            
+            if (audioEnabled) {
+                masterGain.gain.value = 0.5;
+                btn.textContent = '🔊 Son ON';
+                btn.style.background = '#27ae60';
+                info.style.display = 'block';
+                // Resume audio context if suspended (browser autoplay policy)
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+            } else {
+                masterGain.gain.value = 0;
+                btn.textContent = '🔇 Son OFF';
+                btn.style.background = '#95a5a6';
+                info.style.display = 'none';
+            }
+        });
 
         // Fullscreen
         document.getElementById('fullscreenBtn').addEventListener('click', () => {

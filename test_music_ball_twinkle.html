@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎵 Guess the Song - Twinkle Demo</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: Arial, sans-serif; }
+        canvas { display: block; }
+        #challenge {
+            position: absolute;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 200;
+            pointer-events: none;
+        }
+        #title {
+            font-size: 48px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 0 0 20px cyan, 0 0 40px cyan;
+            animation: pulse 2s infinite;
+        }
+        #hint {
+            font-size: 24px;
+            color: #ffff00;
+            margin-top: 10px;
+            text-shadow: 0 0 10px #ffff00;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            z-index: 200;
+        }
+        button {
+            background: #00ffff;
+            color: #000;
+            border: none;
+            padding: 15px 30px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 18px;
+            box-shadow: 0 4px 15px rgba(0, 255, 255, 0.5);
+        }
+        button:hover { background: #00cccc; transform: scale(1.05); }
+    </style>
+</head>
+<body>
+    <div id="challenge">
+        <div id="title">🤔 DEVINE LA CHANSON !</div>
+        <div id="hint">Indice : Comptine universelle ⭐</div>
+    </div>
+    
+    <div id="controls">
+        <button id="audioBtn">🔊 Activer Son</button>
+        <button id="dropBtn">▶ Drop Ball</button>
+        <button id="resetBtn">↻ Reset</button>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // ========== "TWINKLE TWINKLE LITTLE STAR" MELODY ==========
+        // C C G G A A G - F F E E D D C
+        const TWINKLE_MELODY = [
+            60, 60, 67, 67, 69, 69, 67, // Twinkle twinkle little star
+            65, 65, 64, 64, 62, 62, 60  // How I wonder what you are
+        ];
+
+        // ========== WEB AUDIO API ==========
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const masterGain = audioContext.createGain();
+        masterGain.gain.value = 0;
+        masterGain.connect(audioContext.destination);
+
+        const NOTES_TO_COLORS = {
+            60: 0xff6b6b, // C - Rouge
+            62: 0xffa500, // D - Orange
+            64: 0xffff00, // E - Jaune
+            65: 0x98fb98, // F - Vert
+            67: 0x4ecdc4, // G - Cyan
+            69: 0x4169e1, // A - Bleu
+            71: 0x9b59b6, // B - Violet
+        };
+
+        function midiToFreq(note) {
+            return 440 * Math.pow(2, (note - 69) / 12);
+        }
+
+        function playNote(midiNote, duration = 0.4, velocity = 1.0) {
+            const freq = midiToFreq(midiNote);
+            const now = audioContext.currentTime;
+            
+            const osc = audioContext.createOscillator();
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+            
+            const noteGain = audioContext.createGain();
+            noteGain.gain.value = 0;
+            noteGain.gain.linearRampToValueAtTime(velocity * 0.8, now + 0.01);
+            noteGain.gain.exponentialRampToValueAtTime(velocity * 0.3, now + 0.1);
+            noteGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+            
+            osc.connect(noteGain);
+            noteGain.connect(masterGain);
+            
+            osc.start(now);
+            osc.stop(now + duration);
+        }
+
+        // ========== THREE.JS SCENE ==========
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a1a);
+        scene.fog = new THREE.Fog(0x0a0a1a, 20, 50);
+
+        const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 8, 15);
+        camera.lookAt(0, 8, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        document.body.appendChild(renderer.domElement);
+
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        composer.addPass(new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            2.0, 0.5, 0.85
+        ));
+
+        // Lighting
+        scene.add(new THREE.AmbientLight(0x404040, 0.6));
+        const keyLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        keyLight.position.set(5, 15, 10);
+        keyLight.castShadow = true;
+        scene.add(keyLight);
+
+        // ========== PHYSICS ==========
+        const world = new CANNON.World({
+            gravity: new CANNON.Vec3(0, -12, 0)
+        });
+
+        const platformMaterial = new CANNON.Material('platform');
+        const ballMaterial = new CANNON.Material('ball');
+        const contact = new CANNON.ContactMaterial(platformMaterial, ballMaterial, {
+            friction: 0.1,
+            restitution: 0.75
+        });
+        world.addContactMaterial(contact);
+
+        // ========== CREATE PLATFORMS FROM MELODY ==========
+        const platforms = [];
+        const platformBodies = [];
+        const platformLights = [];
+
+        TWINKLE_MELODY.forEach((note, i) => {
+            const y = 14 - i * 1.8; // Descending
+            const side = (i % 2 === 0) ? -1 : 1;
+            const x = side * 3;
+            const z = 1;
+            
+            const color = NOTES_TO_COLORS[note % 12 + 60] || 0xffffff;
+            
+            // Platform mesh
+            const geom = new THREE.CylinderGeometry(0.8, 0.8, 0.25, 32);
+            const mat = new THREE.MeshStandardMaterial({
+                color: color,
+                emissive: color,
+                emissiveIntensity: 0.5,
+                metalness: 0.3,
+                roughness: 0.4
+            });
+            const mesh = new THREE.Mesh(geom, mat);
+            mesh.position.set(x, y, z);
+            mesh.userData.midiNote = note;
+            mesh.castShadow = true;
+            scene.add(mesh);
+            platforms.push(mesh);
+            
+            // Light
+            const light = new THREE.PointLight(color, 2, 5);
+            light.position.set(x, y, z - 1);
+            scene.add(light);
+            platformLights.push(light);
+            
+            // Physics
+            const shape = new CANNON.Cylinder(0.8, 0.8, 0.25, 16);
+            const body = new CANNON.Body({ mass: 0, material: platformMaterial });
+            body.addShape(shape);
+            body.position.set(x, y, z);
+            body.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2);
+            body.userData = { platformIndex: i };
+            world.addBody(body);
+            platformBodies.push(body);
+        });
+
+        // ========== BALL ==========
+        const bubbleGeom = new THREE.SphereGeometry(0.5, 32, 32);
+        const bubbleMat = new THREE.MeshPhysicalMaterial({
+            color: 0x00ffff,
+            transmission: 0.9,
+            opacity: 0.3,
+            metalness: 0.1,
+            roughness: 0.1,
+            transparent: true
+        });
+        const bubbleMesh = new THREE.Mesh(bubbleGeom, bubbleMat);
+        scene.add(bubbleMesh);
+
+        const ballBody = new CANNON.Body({
+            mass: 1,
+            shape: new CANNON.Sphere(0.5),
+            material: ballMaterial,
+            linearDamping: 0.01
+        });
+        world.addBody(ballBody);
+
+        const ballLight = new THREE.PointLight(0x00ffff, 3, 8);
+        scene.add(ballLight);
+
+        // Collision detection
+        const collisionHistory = new Set();
+        ballBody.addEventListener('collide', (event) => {
+            const contactBody = event.body;
+            if (contactBody.userData && contactBody.userData.platformIndex !== undefined) {
+                const idx = contactBody.userData.platformIndex;
+                
+                if (collisionHistory.has(idx)) return;
+                collisionHistory.add(idx);
+                setTimeout(() => collisionHistory.delete(idx), 250);
+                
+                const note = platforms[idx].userData.midiNote;
+                const velocity = Math.min(Math.abs(event.contact.getImpactVelocityAlongNormal()) / 15, 1.0);
+                
+                playNote(note, 0.5, velocity);
+                
+                platformLights[idx].intensity = 5;
+                setTimeout(() => { platformLights[idx].intensity = 2; }, 150);
+                
+                console.log(`🎵 Note ${idx + 1}/14: ${note}`);
+            }
+        });
+
+        function resetBall() {
+            ballBody.position.set(-3, 16, 1);
+            ballBody.velocity.set(1.8, 0, 0);
+            ballBody.angularVelocity.set(0, 0, 0);
+            collisionHistory.clear();
+        }
+
+        // ========== CONTROLS ==========
+        let audioEnabled = false;
+        document.getElementById('audioBtn').addEventListener('click', () => {
+            audioEnabled = !audioEnabled;
+            const btn = document.getElementById('audioBtn');
+            
+            if (audioEnabled) {
+                masterGain.gain.value = 0.6;
+                btn.textContent = '🔊 Son ON';
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+            } else {
+                masterGain.gain.value = 0;
+                btn.textContent = '🔇 Son OFF';
+            }
+        });
+
+        document.getElementById('dropBtn').addEventListener('click', resetBall);
+        document.getElementById('resetBtn').addEventListener('click', resetBall);
+
+        resetBall();
+
+        // ========== ANIMATION LOOP ==========
+        const fixedTimeStep = 1 / 60;
+        let lastTime = performance.now() / 1000;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const currentTime = performance.now() / 1000;
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+            
+            world.step(fixedTimeStep, deltaTime, 3);
+            
+            bubbleMesh.position.copy(ballBody.position);
+            ballLight.position.copy(ballBody.position);
+            
+            // Camera follow
+            camera.position.x = ballBody.position.x * 0.15;
+            camera.position.y = ballBody.position.y + 2;
+            camera.lookAt(ballBody.position.x * 0.15, ballBody.position.y - 1, 0);
+            
+            composer.render();
+        }
+        
+        animate();
+
+        // Auto-reveal after 15 seconds
+        setTimeout(() => {
+            const hint = document.getElementById('hint');
+            hint.textContent = "🎵 C'est TWINKLE TWINKLE LITTLE STAR ! ⭐";
+            hint.style.fontSize = '28px';
+        }, 15000);
+    </script>
+</body>
+</html>
