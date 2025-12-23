@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧬 DNA Music Ball - Leo 10s</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: Arial, sans-serif; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            text-align: center;
+            color: white;
+            z-index: 200;
+            pointer-events: none;
+        }
+        #title {
+            font-size: 42px;
+            font-weight: bold;
+            text-shadow: 0 0 20px cyan;
+            animation: pulse 2s infinite;
+        }
+        #stats {
+            font-size: 16px;
+            color: #ffff00;
+            margin-top: 10px;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 200;
+            text-align: center;
+        }
+        button {
+            background: linear-gradient(135deg, #00ffff, #00cccc);
+            color: #000;
+            border: none;
+            padding: 15px 30px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 18px;
+            box-shadow: 0 4px 15px rgba(0, 255, 255, 0.4);
+        }
+        button:hover { transform: translateY(-2px); }
+        button.active { background: linear-gradient(135deg, #00ff00, #00cc00); }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <div id="title">🧬 DNA MUSIC BALL</div>
+        <div id="stats">Chargement...</div>
+    </div>
+    
+    <div id="controls">
+        <button id="audioBtn">🔊 Activer Son</button>
+        <button id="dropBtn" disabled>▶️ DROP</button>
+        <button id="resetBtn">↻ RESET</button>
+        <button id="viewBtn">👁️ Vue DNA</button>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ========== WEB AUDIO API ==========
+        let audioContext = null;
+        let masterGain = null;
+        let audioEnabled = false;
+
+        function midiToFreq(note) {
+            return 440 * Math.pow(2, (note - 69) / 12);
+        }
+
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                masterGain = audioContext.createGain();
+                masterGain.gain.value = 0.6;
+                masterGain.connect(audioContext.destination);
+            }
+            
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            
+            audioEnabled = true;
+            document.getElementById('audioBtn').textContent = '🔊 Son ON';
+            document.getElementById('audioBtn').classList.add('active');
+            document.getElementById('dropBtn').disabled = false;
+        }
+
+        function playNote(midiNote, duration = 0.4, velocity = 1.0) {
+            if (!audioEnabled || !audioContext) return;
+            
+            const freq = midiToFreq(midiNote);
+            const now = audioContext.currentTime;
+            
+            const osc = audioContext.createOscillator();
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+            
+            const noteGain = audioContext.createGain();
+            noteGain.gain.value = 0;
+            noteGain.gain.linearRampToValueAtTime(velocity * 0.7, now + 0.01);
+            noteGain.gain.exponentialRampToValueAtTime(velocity * 0.3, now + 0.08);
+            noteGain.gain.exponentialRampToValueAtTime(0.01, now + duration);
+            
+            osc.connect(noteGain);
+            noteGain.connect(masterGain);
+            
+            osc.start(now);
+            osc.stop(now + duration);
+        }
+
+        // ========== THREE.JS SCENE ==========
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a1a);
+        scene.fog = new THREE.Fog(0x0a0a1a, 30, 80);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+        camera.position.set(0, 15, 20);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        document.body.appendChild(renderer.domElement);
+
+        // Post-processing
+        const composer = new EffectComposer(renderer);
+        composer.addPass(new RenderPass(scene, camera));
+        composer.addPass(new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            2.5, 0.6, 0.85
+        ));
+
+        // Controls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxDistance = 50;
+        controls.minDistance = 5;
+
+        // Lighting
+        scene.add(new THREE.AmbientLight(0x202040, 0.8));
+        const keyLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        keyLight.position.set(10, 20, 10);
+        keyLight.castShadow = true;
+        scene.add(keyLight);
+
+        // ========== PHYSICS ==========
+        const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -12, 0) });
+        const platformMaterial = new CANNON.Material('platform');
+        const ballMaterial = new CANNON.Material('ball');
+        const contact = new CANNON.ContactMaterial(platformMaterial, ballMaterial, {
+            friction: 0.1,
+            restitution: 0.8
+        });
+        world.addContactMaterial(contact);
+
+        // ========== BALL ==========
+        const bubbleGeom = new THREE.SphereGeometry(0.5, 32, 32);
+        const bubbleMat = new THREE.MeshPhysicalMaterial({
+            color: 0x00ffff,
+            transmission: 0.9,
+            opacity: 0.3,
+            metalness: 0.1,
+            roughness: 0.1,
+            transparent: true
+        });
+        const bubbleMesh = new THREE.Mesh(bubbleGeom, bubbleMat);
+        scene.add(bubbleMesh);
+
+        const ballBody = new CANNON.Body({
+            mass: 1,
+            shape: new CANNON.Sphere(0.5),
+            material: ballMaterial,
+            linearDamping: 0.01
+        });
+        world.addBody(ballBody);
+
+        const ballLight = new THREE.PointLight(0x00ffff, 4, 12);
+        scene.add(ballLight);
+
+        // ========== LOAD DNA DATA ==========
+        let platforms = [];
+        let platformBodies = [];
+        let platformLights = [];
+        let dnaData = null;
+        let collisionHistory = new Set();
+        let notesPlayed = 0;
+
+        async function loadDNAData() {
+            try {
+                const response = await fetch('data/leo_10s_dna.json');
+                dnaData = await response.json();
+                
+                console.log('🧬 DNA Data loaded:', dnaData.metadata);
+                console.log('Platforms:', dnaData.platforms.length);
+                console.log('Climax:', dnaData.analysis.climaxIndex);
+                
+                createDNAPlatforms();
+                
+                document.getElementById('stats').textContent = 
+                    `${dnaData.platforms.length} plateformes | ADN Musical`;
+                
+                return true;
+            } catch (error) {
+                console.error('Error loading DNA:', error);
+                document.getElementById('stats').textContent = 'Erreur chargement DNA';
+                return false;
+            }
+        }
+
+        function createDNAPlatforms() {
+            // Clear existing
+            platforms.forEach(p => scene.remove(p));
+            platformLights.forEach(l => scene.remove(l));
+            platformBodies.forEach(b => world.removeBody(b));
+            platforms = [];
+            platformLights = [];
+            platformBodies = [];
+
+            dnaData.platforms.forEach((data, i) => {
+                const x = parseFloat(data.x);
+                const y = parseFloat(data.y);
+                const z = parseFloat(data.z);
+                const size = parseFloat(data.size);
+                const colorHex = parseInt(data.color);
+
+                // Visual mesh
+                let geometry;
+                switch(data.type) {
+                    case 'circle':
+                        geometry = new THREE.CylinderGeometry(size * 0.8, size * 0.8, 0.25, 16);
+                        break;
+                    case 'star':
+                        geometry = new THREE.CylinderGeometry(size * 0.6, size * 0.6, 0.3, 5);
+                        break;
+                    case 'tube':
+                        geometry = new THREE.CylinderGeometry(size * 0.5, size * 0.5, 0.2, 16);
+                        break;
+                    case 'halfPipe':
+                        geometry = new THREE.CylinderGeometry(size * 1.2, size * 1.2, 0.3, 12, 1, true, 0, Math.PI);
+                        break;
+                    default:
+                        geometry = new THREE.BoxGeometry(size * 1.5, 0.25, size * 1.2);
+                }
+
+                const material = new THREE.MeshStandardMaterial({
+                    color: colorHex,
+                    emissive: colorHex,
+                    emissiveIntensity: 0.4,
+                    metalness: 0.3,
+                    roughness: 0.4
+                });
+
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(x, y, z);
+                mesh.rotation.x = Math.PI / 2; // Horizontal
+                mesh.castShadow = true;
+                mesh.userData.midiNote = data.note.pitch;
+                mesh.userData.platformIndex = i;
+                scene.add(mesh);
+                platforms.push(mesh);
+
+                // Light
+                const light = new THREE.PointLight(colorHex, 2, 6);
+                light.position.set(x, y, z - 1);
+                scene.add(light);
+                platformLights.push(light);
+
+                // Physics body
+                let physicsShape;
+                if (data.type === 'halfPipe') {
+                    physicsShape = new CANNON.Box(new CANNON.Vec3(size * 1.2, 0.125, size * 1.2));
+                } else {
+                    physicsShape = new CANNON.Cylinder(size * 0.8, size * 0.8, 0.25, 16);
+                }
+
+                const body = new CANNON.Body({ mass: 0, material: platformMaterial });
+                body.addShape(physicsShape);
+                body.position.set(x, y, z);
+                body.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2);
+                body.userData = { platformIndex: i };
+                world.addBody(body);
+                platformBodies.push(body);
+            });
+
+            console.log(`✓ Created ${platforms.length} DNA platforms`);
+        }
+
+        // Collision detection
+        ballBody.addEventListener('collide', (event) => {
+            const contactBody = event.body;
+            if (contactBody.userData && contactBody.userData.platformIndex !== undefined) {
+                const idx = contactBody.userData.platformIndex;
+                
+                if (collisionHistory.has(idx)) return;
+                collisionHistory.add(idx);
+                setTimeout(() => collisionHistory.delete(idx), 250);
+                
+                const platform = platforms[idx];
+                const data = dnaData.platforms[idx];
+                const note = data.note.pitch;
+                const velocity = Math.min(Math.abs(event.contact.getImpactVelocityAlongNormal()) / 15, 1.0);
+                
+                playNote(note, 0.5, velocity);
+                
+                platformLights[idx].intensity = 6;
+                setTimeout(() => { platformLights[idx].intensity = 2; }, 150);
+                
+                notesPlayed++;
+                document.getElementById('stats').textContent = 
+                    `Note ${notesPlayed}/${dnaData.platforms.length} | Pitch: ${note}`;
+                
+                console.log(`🎵 [${idx}] Note ${note} - time: ${data.note.time}s`);
+            }
+        });
+
+        function resetBall() {
+            if (!dnaData || platforms.length === 0) return;
+            
+            const firstPlatform = dnaData.platforms[0];
+            const x = parseFloat(firstPlatform.x);
+            const y = parseFloat(firstPlatform.y) + 3;
+            const z = parseFloat(firstPlatform.z);
+            
+            ballBody.position.set(x, y, z);
+            ballBody.velocity.set(1.5, 0, 0);
+            ballBody.angularVelocity.set(0, 0, 0);
+            
+            collisionHistory.clear();
+            notesPlayed = 0;
+            
+            console.log(`Reset: ball at (${x}, ${y}, ${z})`);
+        }
+
+        // ========== CONTROLS ==========
+        let gameRunning = false;
+        let dnaView = false;
+
+        document.getElementById('audioBtn').addEventListener('click', initAudio);
+        
+        document.getElementById('dropBtn').addEventListener('click', () => {
+            gameRunning = true;
+            resetBall();
+        });
+        
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            gameRunning = false;
+            resetBall();
+        });
+
+        document.getElementById('viewBtn').addEventListener('click', () => {
+            dnaView = !dnaView;
+            if (dnaView) {
+                camera.position.set(0, 25, 0);
+                camera.lookAt(0, 0, 0);
+                document.getElementById('viewBtn').textContent = '🎬 Vue Jeu';
+            } else {
+                camera.position.set(0, 15, 20);
+                camera.lookAt(0, 10, 0);
+                document.getElementById('viewBtn').textContent = '👁️ Vue DNA';
+            }
+        });
+
+        // ========== ANIMATION LOOP ==========
+        const fixedTimeStep = 1 / 60;
+        let lastTime = performance.now() / 1000;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const currentTime = performance.now() / 1000;
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+            
+            if (gameRunning) {
+                world.step(fixedTimeStep, deltaTime, 3);
+                
+                bubbleMesh.position.copy(ballBody.position);
+                ballLight.position.copy(ballBody.position);
+                
+                if (!dnaView) {
+                    camera.position.x = THREE.MathUtils.lerp(camera.position.x, ballBody.position.x * 0.2, 0.05);
+                    camera.position.y = THREE.MathUtils.lerp(camera.position.y, ballBody.position.y + 5, 0.05);
+                    camera.lookAt(ballBody.position.x * 0.2, ballBody.position.y, 0);
+                }
+            }
+            
+            controls.update();
+            composer.render();
+        }
+
+        // ========== INIT ==========
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Load DNA and start
+        loadDNAData().then(success => {
+            if (success) {
+                resetBall();
+                animate();
+            }
+        });
+    </script>
+</body>
+</html>

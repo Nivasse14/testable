@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎵 Note-by-Note Test</title>
+    <style>
+        body { 
+            margin: 0; 
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        #container {
+            text-align: center;
+            color: white;
+        }
+        canvas { 
+            display: block;
+            margin: 20px auto;
+            border: 2px solid #00ffff;
+            border-radius: 10px;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+        }
+        h1 {
+            font-size: 48px;
+            margin: 20px 0;
+            text-shadow: 0 0 20px cyan;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        .info {
+            font-size: 18px;
+            color: #ffff00;
+            margin: 10px 0;
+        }
+        button {
+            background: linear-gradient(135deg, #00ffff, #00cccc);
+            color: #000;
+            border: none;
+            padding: 20px 40px;
+            margin: 10px;
+            cursor: pointer;
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 20px;
+            box-shadow: 0 4px 20px rgba(0, 255, 255, 0.4);
+            transition: all 0.3s ease;
+        }
+        button:hover { 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 25px rgba(0, 255, 255, 0.6);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 16px;
+            color: #aaa;
+            min-height: 30px;
+        }
+        .note-display {
+            font-size: 32px;
+            margin: 20px 0;
+            color: #00ff00;
+            text-shadow: 0 0 15px #00ff00;
+            min-height: 50px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1>🎵 DEVINE LA CHANSON !</h1>
+        <div class="info">Clique "START" pour activer le son</div>
+        <div class="info">Chaque rebond = 1 note de xylophone 🎹</div>
+        
+        <canvas id="gameCanvas" width="600" height="400"></canvas>
+        
+        <div class="note-display" id="noteDisplay">Prêt...</div>
+        
+        <div>
+            <button id="startBtn" style="background: linear-gradient(135deg, #00ff00, #00cc00);">🚀 START</button>
+            <button id="dropBtn" disabled>▶️ DROP BALL</button>
+            <button id="resetBtn">↻ RESET</button>
+        </div>
+        
+        <div id="status"></div>
+    </div>
+
+    <script>
+        // ========== CONFIGURATION ==========
+        const MELODY = [
+            60, 60, 67, 67, 69, 69, 67, // Twinkle twinkle little star
+            65, 65, 64, 64, 62, 62, 60  // How I wonder what you are
+        ];
+
+        const NOTES_TO_COLORS = {
+            60: '#ff6b6b', // C - Rouge
+            62: '#ffa500', // D - Orange
+            64: '#ffff00', // E - Jaune
+            65: '#98fb98', // F - Vert
+            67: '#4ecdc4', // G - Cyan
+            69: '#4169e1', // A - Bleu
+            71: '#9b59b6', // B - Violet
+        };
+
+        const NOTE_NAMES = {
+            60: 'Do (C)', 62: 'Ré (D)', 64: 'Mi (E)', 
+            65: 'Fa (F)', 67: 'Sol (G)', 69: 'La (A)', 71: 'Si (B)'
+        };
+
+        // ========== CANVAS SETUP ==========
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // ========== AUDIO CONTEXT ==========
+        let audioContext = null;
+        let masterGain = null;
+        let audioEnabled = false;
+
+        function midiToFreq(note) {
+            return 440 * Math.pow(2, (note - 69) / 12);
+        }
+
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                masterGain = audioContext.createGain();
+                masterGain.gain.value = 0.6;
+                masterGain.connect(audioContext.destination);
+            }
+            
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            
+            audioEnabled = true;
+            document.getElementById('status').textContent = '🔊 Audio activé !';
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('dropBtn').disabled = false;
+        }
+
+        function playNote(midiNote, duration = 0.5) {
+            if (!audioEnabled || !audioContext) return;
+            
+            const freq = midiToFreq(midiNote);
+            const now = audioContext.currentTime;
+            
+            // Oscillateur principal (triangle = xylophone)
+            const osc = audioContext.createOscillator();
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+            
+            // Enveloppe ADSR
+            const noteGain = audioContext.createGain();
+            noteGain.gain.value = 0;
+            noteGain.gain.linearRampToValueAtTime(0.7, now + 0.01); // Attack
+            noteGain.gain.exponentialRampToValueAtTime(0.3, now + 0.08); // Decay
+            noteGain.gain.exponentialRampToValueAtTime(0.01, now + duration); // Release
+            
+            osc.connect(noteGain);
+            noteGain.connect(masterGain);
+            
+            osc.start(now);
+            osc.stop(now + duration);
+            
+            // Update display
+            const noteName = NOTE_NAMES[midiNote % 12 + 60] || `Note ${midiNote}`;
+            document.getElementById('noteDisplay').textContent = `🎵 ${noteName}`;
+            document.getElementById('noteDisplay').style.color = NOTES_TO_COLORS[midiNote % 12 + 60] || '#ffffff';
+        }
+
+        // ========== PHYSICS SETUP ==========
+        class Ball {
+            constructor() {
+                this.x = 100;
+                this.y = 50;
+                this.vx = 3;
+                this.vy = 0;
+                this.radius = 15;
+                this.gravity = 0.5;
+                this.bounce = 0.75;
+            }
+
+            update() {
+                this.vy += this.gravity;
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Wall bounce
+                if (this.x - this.radius < 0 || this.x + this.radius > canvas.width) {
+                    this.vx *= -1;
+                    this.x = Math.max(this.radius, Math.min(canvas.width - this.radius, this.x));
+                }
+
+                // Ground bounce
+                if (this.y + this.radius > canvas.height) {
+                    this.y = canvas.height - this.radius;
+                    this.vy *= -this.bounce;
+                }
+            }
+
+            draw() {
+                // Glow effect
+                const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius * 2);
+                gradient.addColorStop(0, 'rgba(0, 255, 255, 0.8)');
+                gradient.addColorStop(0.5, 'rgba(0, 255, 255, 0.4)');
+                gradient.addColorStop(1, 'rgba(0, 255, 255, 0)');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(this.x - this.radius * 2, this.y - this.radius * 2, this.radius * 4, this.radius * 4);
+
+                // Ball
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.6)';
+                ctx.strokeStyle = '#00ffff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+
+                // Inner glow
+                ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            reset() {
+                this.x = 100;
+                this.y = 50;
+                this.vx = 3;
+                this.vy = 0;
+            }
+        }
+
+        class Platform {
+            constructor(x, y, width, height, note) {
+                this.x = x;
+                this.y = y;
+                this.width = width;
+                this.height = height;
+                this.note = note;
+                this.color = NOTES_TO_COLORS[note % 12 + 60] || '#ffffff';
+                this.glow = 0;
+                this.hit = false;
+            }
+
+            checkCollision(ball) {
+                if (this.hit) return false;
+
+                if (ball.x + ball.radius > this.x &&
+                    ball.x - ball.radius < this.x + this.width &&
+                    ball.y + ball.radius > this.y &&
+                    ball.y - ball.radius < this.y + this.height &&
+                    ball.vy > 0) {
+                    
+                    // Bounce
+                    ball.y = this.y - ball.radius;
+                    ball.vy *= -ball.bounce;
+                    
+                    // Play note
+                    playNote(this.note);
+                    this.glow = 1;
+                    this.hit = true;
+                    
+                    setTimeout(() => { this.hit = false; }, 300);
+                    
+                    return true;
+                }
+                return false;
+            }
+
+            update() {
+                if (this.glow > 0) {
+                    this.glow -= 0.05;
+                }
+            }
+
+            draw() {
+                // Glow effect when hit
+                if (this.glow > 0) {
+                    ctx.shadowBlur = 30 * this.glow;
+                    ctx.shadowColor = this.color;
+                }
+
+                // Platform
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+
+                // Border
+                ctx.strokeStyle = this.glow > 0 ? '#ffffff' : this.color;
+                ctx.lineWidth = 2;
+                ctx.strokeRect(this.x, this.y, this.width, this.height);
+
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        // ========== GAME STATE ==========
+        let ball = new Ball();
+        let platforms = [];
+        let gameRunning = false;
+        let notesPlayed = 0;
+
+        function createPlatforms() {
+            platforms = [];
+            const platformWidth = 80;
+            const platformHeight = 15;
+            const startY = 120;
+            const spacing = 20;
+
+            for (let i = 0; i < MELODY.length; i++) {
+                const side = i % 2 === 0 ? 0 : 1;
+                const x = side === 0 ? 100 : 420;
+                const y = startY + i * spacing;
+                
+                platforms.push(new Platform(x, y, platformWidth, platformHeight, MELODY[i]));
+            }
+        }
+
+        function draw() {
+            // Clear with trail effect
+            ctx.fillStyle = 'rgba(26, 26, 46, 0.3)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw platforms
+            platforms.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            // Draw ball
+            ball.draw();
+
+            // Check collisions
+            platforms.forEach(p => {
+                if (p.checkCollision(ball)) {
+                    notesPlayed++;
+                    document.getElementById('status').textContent = `Notes jouées : ${notesPlayed}/${MELODY.length}`;
+                    
+                    if (notesPlayed === MELODY.length) {
+                        setTimeout(() => {
+                            document.getElementById('noteDisplay').textContent = '🎉 C\'est TWINKLE TWINKLE LITTLE STAR ! ⭐';
+                            document.getElementById('noteDisplay').style.fontSize = '24px';
+                        }, 1000);
+                    }
+                }
+            });
+
+            if (gameRunning) {
+                ball.update();
+                requestAnimationFrame(draw);
+            }
+        }
+
+        function startGame() {
+            if (!audioEnabled) {
+                initAudio();
+            }
+            gameRunning = true;
+            notesPlayed = 0;
+            ball.reset();
+            createPlatforms();
+            document.getElementById('status').textContent = 'En cours... Écoute la mélodie !';
+            draw();
+        }
+
+        function reset() {
+            gameRunning = false;
+            notesPlayed = 0;
+            ball.reset();
+            createPlatforms();
+            document.getElementById('noteDisplay').textContent = 'Prêt...';
+            document.getElementById('noteDisplay').style.fontSize = '32px';
+            document.getElementById('status').textContent = '';
+            
+            // Clear canvas
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw platforms
+            platforms.forEach(p => p.draw());
+            ball.draw();
+        }
+
+        // ========== EVENT LISTENERS ==========
+        document.getElementById('startBtn').addEventListener('click', initAudio);
+        document.getElementById('dropBtn').addEventListener('click', startGame);
+        document.getElementById('resetBtn').addEventListener('click', reset);
+
+        // ========== INITIALIZE ==========
+        createPlatforms();
+        reset();
+
+        // Auto-reveal hint after 20 seconds
+        setTimeout(() => {
+            if (notesPlayed > 0 && notesPlayed < MELODY.length) {
+                document.getElementById('status').textContent += ' 💡 Indice : Comptine avec des étoiles...';
+            }
+        }, 20000);
+    </script>
+</body>
+</html>

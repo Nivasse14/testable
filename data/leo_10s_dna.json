@@ -1,0 +1,1734 @@
+{
+  "metadata": {
+    "generator": "MIDI-to-DNA v1.0",
+    "timestamp": "2025-12-23T00:01:59.127Z",
+    "totalPlatforms": 77,
+    "config": {
+      "helixRadius": 4,
+      "helixTurns": 3,
+      "verticalSpacing": 1.5,
+      "baseHeight": 25
+    }
+  },
+  "analysis": {
+    "sections": [
+      {
+        "start": 0,
+        "patterns": [],
+        "end": 76,
+        "length": 76
+      }
+    ],
+    "motifs": [
+      {
+        "pattern": "46-58-72-58",
+        "occurrences": 3
+      },
+      {
+        "pattern": "58-72-58-46",
+        "occurrences": 3
+      },
+      {
+        "pattern": "46-58-62-53",
+        "occurrences": 2
+      }
+    ],
+    "climaxIndex": 46
+  },
+  "platforms": [
+    {
+      "x": "-1.04",
+      "y": "25.00",
+      "z": "-2.86",
+      "size": "1.31",
+      "depth": "0.22",
+      "color": "0x52e0a8",
+      "colorName": "hsl(156.27906976744188, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 46,
+        "velocity": 69,
+        "duration": 112,
+        "time": "1.619",
+        "timeDelta": "1.619"
+      },
+      "metadata": {
+        "index": 0,
+        "helixAngle": "-105.0°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "4.00",
+      "y": "23.50",
+      "z": "0.93",
+      "size": "1.01",
+      "depth": "0.32",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 43,
+        "duration": 158,
+        "time": "1.571",
+        "timeDelta": "-0.048"
+      },
+      "metadata": {
+        "index": 1,
+        "helixAngle": "-1.0°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "3.53",
+      "y": "22.00",
+      "z": "2.88",
+      "size": "1.30",
+      "depth": "0.27",
+      "color": "0xb5e052",
+      "colorName": "hsl(78.13953488372094, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 60,
+        "velocity": 68,
+        "duration": 133,
+        "time": "1.645",
+        "timeDelta": "0.074"
+      },
+      "metadata": {
+        "index": 2,
+        "helixAngle": "28.1°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-2.68",
+      "y": "20.50",
+      "z": "3.97",
+      "size": "0.93",
+      "depth": "0.32",
+      "color": "0xe06c52",
+      "colorName": "hsl(11.162790697674412, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 72,
+        "velocity": 36,
+        "duration": 158,
+        "time": "1.645",
+        "timeDelta": "0.000"
+      },
+      "metadata": {
+        "index": 3,
+        "helixAngle": "132.1°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "2.63",
+      "y": "19.00",
+      "z": "-2.01",
+      "size": "1.40",
+      "depth": "0.31",
+      "color": "0x52e0a8",
+      "colorName": "hsl(156.27906976744188, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 46,
+        "velocity": 76,
+        "duration": 154,
+        "time": "1.735",
+        "timeDelta": "0.091"
+      },
+      "metadata": {
+        "index": 4,
+        "helixAngle": "-48.9°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "2.29",
+      "y": "17.50",
+      "z": "4.28",
+      "size": "1.04",
+      "depth": "0.31",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 46,
+        "duration": 154,
+        "time": "1.735",
+        "timeDelta": "0.000"
+      },
+      "metadata": {
+        "index": 5,
+        "helixAngle": "55.1°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-3.98",
+      "y": "16.00",
+      "z": "1.41",
+      "size": "0.97",
+      "depth": "0.17",
+      "color": "0xe06c52",
+      "colorName": "hsl(11.162790697674412, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 72,
+        "velocity": 40,
+        "duration": 83,
+        "time": "1.809",
+        "timeDelta": "0.074"
+      },
+      "metadata": {
+        "index": 6,
+        "helixAngle": "174.2°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "0.47",
+      "y": "14.50",
+      "z": "4.97",
+      "size": "1.06",
+      "depth": "0.16",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 47,
+        "duration": 82,
+        "time": "1.970",
+        "timeDelta": "0.160"
+      },
+      "metadata": {
+        "index": 7,
+        "helixAngle": "83.2°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "3.97",
+      "y": "13.00",
+      "z": "1.50",
+      "size": "1.40",
+      "depth": "0.32",
+      "color": "0x52e0a8",
+      "colorName": "hsl(156.27906976744188, 70%, 60%)",
+      "type": "circle",
+      "note": {
+        "pitch": 46,
+        "velocity": 76,
+        "duration": 158,
+        "time": "1.896",
+        "timeDelta": "-0.074"
+      },
+      "metadata": {
+        "index": 8,
+        "helixAngle": "7.2°",
+        "isAccord": false
+      }
+    },
+    {
+      "x": "-2.50",
+      "y": "11.50",
+      "z": "-2.12",
+      "size": "1.03",
+      "depth": "0.23",
+      "color": "0xe05252",
+      "colorName": "hsl(0, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 74,
+        "velocity": 45,
+        "duration": 113,
+        "time": "1.970",
+        "timeDelta": "0.074"
+      },
+      "metadata": {
+        "index": 9,
+        "helixAngle": "231.2°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-2.31",
+      "y": "10.00",
+      "z": "4.27",
+      "size": "1.17",
+      "depth": "0.14",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 57,
+        "duration": 71,
+        "time": "2.055",
+        "timeDelta": "0.085"
+      },
+      "metadata": {
+        "index": 10,
+        "helixAngle": "125.3°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-0.82",
+      "y": "8.50",
+      "z": "4.92",
+      "size": "1.41",
+      "depth": "0.63",
+      "color": "0x58e052",
+      "colorName": "hsl(117.20930232558139, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 53,
+        "velocity": 77,
+        "duration": 313,
+        "time": "1.809",
+        "timeDelta": "-0.246"
+      },
+      "metadata": {
+        "index": 11,
+        "helixAngle": "101.8°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-0.81",
+      "y": "7.00",
+      "z": "-2.92",
+      "size": "0.96",
+      "depth": "0.13",
+      "color": "0xe06c52",
+      "colorName": "hsl(11.162790697674412, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 72,
+        "velocity": 39,
+        "duration": 66,
+        "time": "2.135",
+        "timeDelta": "0.326"
+      },
+      "metadata": {
+        "index": 12,
+        "helixAngle": "258.3°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "0.88",
+      "y": "5.50",
+      "z": "4.90",
+      "size": "1.42",
+      "depth": "0.31",
+      "color": "0x52e0a8",
+      "colorName": "hsl(156.27906976744188, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 46,
+        "velocity": 78,
+        "duration": 153,
+        "time": "2.060",
+        "timeDelta": "-0.075"
+      },
+      "metadata": {
+        "index": 13,
+        "helixAngle": "77.3°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-4.00",
+      "y": "4.00",
+      "z": "0.90",
+      "size": "1.07",
+      "depth": "0.17",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 48,
+        "duration": 87,
+        "time": "2.129",
+        "timeDelta": "0.069"
+      },
+      "metadata": {
+        "index": 14,
+        "helixAngle": "181.4°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-3.71",
+      "y": "2.50",
+      "z": "2.51",
+      "size": "1.48",
+      "depth": "0.32",
+      "color": "0x58e052",
+      "colorName": "hsl(117.20930232558139, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 53,
+        "velocity": 83,
+        "duration": 158,
+        "time": "2.135",
+        "timeDelta": "0.006"
+      },
+      "metadata": {
+        "index": 15,
+        "helixAngle": "157.9°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-2.04",
+      "y": "1.00",
+      "z": "-2.44",
+      "size": "1.33",
+      "depth": "0.71",
+      "color": "0xd0e052",
+      "colorName": "hsl(66.97674418604652, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 62,
+        "velocity": 70,
+        "duration": 353,
+        "time": "1.965",
+        "timeDelta": "-0.171"
+      },
+      "metadata": {
+        "index": 16,
+        "helixAngle": "239.4°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-2.75",
+      "y": "-0.50",
+      "z": "3.90",
+      "size": "1.39",
+      "depth": "0.32",
+      "color": "0x52e0a8",
+      "colorName": "hsl(156.27906976744188, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 46,
+        "velocity": 75,
+        "duration": 159,
+        "time": "2.220",
+        "timeDelta": "0.255"
+      },
+      "metadata": {
+        "index": 17,
+        "helixAngle": "133.4°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-2.15",
+      "y": "-2.00",
+      "z": "-2.37",
+      "size": "1.01",
+      "depth": "0.32",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 43,
+        "duration": 159,
+        "time": "2.220",
+        "timeDelta": "0.000"
+      },
+      "metadata": {
+        "index": 18,
+        "helixAngle": "237.5°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "3.99",
+      "y": "-3.50",
+      "z": "0.76",
+      "size": "1.00",
+      "depth": "0.28",
+      "color": "0xe06c52",
+      "colorName": "hsl(11.162790697674412, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 72,
+        "velocity": 42,
+        "duration": 138,
+        "time": "2.300",
+        "timeDelta": "0.080"
+      },
+      "metadata": {
+        "index": 19,
+        "helixAngle": "356.5°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-2.68",
+      "y": "-5.00",
+      "z": "-1.97",
+      "size": "1.35",
+      "depth": "0.32",
+      "color": "0x58e052",
+      "colorName": "hsl(117.20930232558139, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 53,
+        "velocity": 72,
+        "duration": 158,
+        "time": "2.300",
+        "timeDelta": "0.000"
+      },
+      "metadata": {
+        "index": 20,
+        "helixAngle": "228.0°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "1.66",
+      "y": "-6.50",
+      "z": "-2.64",
+      "size": "1.17",
+      "depth": "0.44",
+      "color": "0xb5e052",
+      "colorName": "hsl(78.13953488372094, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 60,
+        "velocity": 57,
+        "duration": 220,
+        "time": "2.300",
+        "timeDelta": "0.000"
+      },
+      "metadata": {
+        "index": 21,
+        "helixAngle": "294.5°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-3.67",
+      "y": "-8.00",
+      "z": "-0.60",
+      "size": "1.43",
+      "depth": "0.32",
+      "color": "0x52e0a8",
+      "colorName": "hsl(156.27906976744188, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 46,
+        "velocity": 79,
+        "duration": 158,
+        "time": "2.385",
+        "timeDelta": "0.085"
+      },
+      "metadata": {
+        "index": 22,
+        "helixAngle": "203.6°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "2.44",
+      "y": "-9.50",
+      "z": "-2.17",
+      "size": "1.19",
+      "depth": "0.32",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 58,
+        "duration": 158,
+        "time": "2.385",
+        "timeDelta": "0.000"
+      },
+      "metadata": {
+        "index": 23,
+        "helixAngle": "307.6°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "1.59",
+      "y": "-11.00",
+      "z": "4.67",
+      "size": "1.01",
+      "depth": "0.36",
+      "color": "0xe06c52",
+      "colorName": "hsl(11.162790697674412, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 72,
+        "velocity": 43,
+        "duration": 179,
+        "time": "2.465",
+        "timeDelta": "0.079"
+      },
+      "metadata": {
+        "index": 24,
+        "helixAngle": "426.6°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "3.64",
+      "y": "-12.50",
+      "z": "-0.65",
+      "size": "1.13",
+      "depth": "0.32",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 53,
+        "duration": 158,
+        "time": "2.550",
+        "timeDelta": "0.085"
+      },
+      "metadata": {
+        "index": 25,
+        "helixAngle": "335.6°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-0.72",
+      "y": "-14.00",
+      "z": "-2.94",
+      "size": "1.47",
+      "depth": "0.33",
+      "color": "0x52e0a8",
+      "colorName": "hsl(156.27906976744188, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 46,
+        "velocity": 82,
+        "duration": 164,
+        "time": "2.550",
+        "timeDelta": "0.000"
+      },
+      "metadata": {
+        "index": 26,
+        "helixAngle": "259.7°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "3.32",
+      "y": "-15.50",
+      "z": "-1.23",
+      "size": "1.43",
+      "depth": "0.62",
+      "color": "0x58e052",
+      "colorName": "hsl(117.20930232558139, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 53,
+        "velocity": 79,
+        "duration": 312,
+        "time": "2.465",
+        "timeDelta": "-0.085"
+      },
+      "metadata": {
+        "index": 27,
+        "helixAngle": "326.2°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-2.96",
+      "y": "-17.00",
+      "z": "3.69",
+      "size": "1.00",
+      "depth": "0.32",
+      "color": "0xe05252",
+      "colorName": "hsl(0, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 74,
+        "velocity": 42,
+        "duration": 159,
+        "time": "2.630",
+        "timeDelta": "0.166"
+      },
+      "metadata": {
+        "index": 28,
+        "helixAngle": "497.7°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "2.11",
+      "y": "-18.50",
+      "z": "-2.40",
+      "size": "1.47",
+      "depth": "0.28",
+      "color": "0x52e0a8",
+      "colorName": "hsl(156.27906976744188, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 46,
+        "velocity": 82,
+        "duration": 138,
+        "time": "2.721",
+        "timeDelta": "0.091"
+      },
+      "metadata": {
+        "index": 29,
+        "helixAngle": "301.8°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "2.79",
+      "y": "-20.00",
+      "z": "3.87",
+      "size": "1.10",
+      "depth": "0.31",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 51,
+        "duration": 154,
+        "time": "2.715",
+        "timeDelta": "-0.006"
+      },
+      "metadata": {
+        "index": 30,
+        "helixAngle": "405.8°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "0.01",
+      "y": "-21.50",
+      "z": "5.00",
+      "size": "1.39",
+      "depth": "0.60",
+      "color": "0xd0e052",
+      "colorName": "hsl(66.97674418604652, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 62,
+        "velocity": 75,
+        "duration": 302,
+        "time": "2.625",
+        "timeDelta": "-0.090"
+      },
+      "metadata": {
+        "index": 31,
+        "helixAngle": "449.8°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "3.22",
+      "y": "-23.00",
+      "z": "3.37",
+      "size": "1.49",
+      "depth": "0.32",
+      "color": "0x58e052",
+      "colorName": "hsl(117.20930232558139, 70%, 60%)",
+      "type": "circle",
+      "note": {
+        "pitch": 53,
+        "velocity": 84,
+        "duration": 159,
+        "time": "2.790",
+        "timeDelta": "0.165"
+      },
+      "metadata": {
+        "index": 32,
+        "helixAngle": "396.3°",
+        "isAccord": false
+      }
+    },
+    {
+      "x": "0.15",
+      "y": "-24.50",
+      "z": "5.00",
+      "size": "1.14",
+      "depth": "0.15",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 54,
+        "duration": 77,
+        "time": "2.875",
+        "timeDelta": "0.085"
+      },
+      "metadata": {
+        "index": 33,
+        "helixAngle": "447.9°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "3.91",
+      "y": "-26.00",
+      "z": "1.82",
+      "size": "1.35",
+      "depth": "0.34",
+      "color": "0x52e0a8",
+      "colorName": "hsl(156.27906976744188, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 46,
+        "velocity": 72,
+        "duration": 169,
+        "time": "2.865",
+        "timeDelta": "-0.010"
+      },
+      "metadata": {
+        "index": 34,
+        "helixAngle": "371.9°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-1.75",
+      "y": "-27.50",
+      "z": "4.60",
+      "size": "1.07",
+      "depth": "0.16",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 48,
+        "duration": 82,
+        "time": "2.955",
+        "timeDelta": "0.091"
+      },
+      "metadata": {
+        "index": 35,
+        "helixAngle": "475.9°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-2.30",
+      "y": "-29.00",
+      "z": "-2.27",
+      "size": "0.98",
+      "depth": "0.22",
+      "color": "0xe06c52",
+      "colorName": "hsl(11.162790697674412, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 72,
+        "velocity": 41,
+        "duration": 112,
+        "time": "2.950",
+        "timeDelta": "-0.005"
+      },
+      "metadata": {
+        "index": 36,
+        "helixAngle": "594.9°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-3.73",
+      "y": "-30.50",
+      "z": "2.44",
+      "size": "1.24",
+      "depth": "0.28",
+      "color": "0xb5e052",
+      "colorName": "hsl(78.13953488372094, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 60,
+        "velocity": 63,
+        "duration": 138,
+        "time": "2.950",
+        "timeDelta": "0.000"
+      },
+      "metadata": {
+        "index": 37,
+        "helixAngle": "519.0°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-2.03",
+      "y": "-32.00",
+      "z": "4.45",
+      "size": "1.39",
+      "depth": "0.31",
+      "color": "0x58e052",
+      "colorName": "hsl(117.20930232558139, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 53,
+        "velocity": 75,
+        "duration": 153,
+        "time": "2.955",
+        "timeDelta": "0.005"
+      },
+      "metadata": {
+        "index": 38,
+        "helixAngle": "480.5°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-2.85",
+      "y": "-33.50",
+      "z": "-1.80",
+      "size": "0.95",
+      "depth": "0.19",
+      "color": "0xe0c952",
+      "colorName": "hsl(50.232558139534895, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 65,
+        "velocity": 38,
+        "duration": 97,
+        "time": "3.046",
+        "timeDelta": "0.091"
+      },
+      "metadata": {
+        "index": 39,
+        "helixAngle": "584.5°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-0.42",
+      "y": "-35.00",
+      "z": "4.98",
+      "size": "1.42",
+      "depth": "0.32",
+      "color": "0x52e0a8",
+      "colorName": "hsl(156.27906976744188, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 46,
+        "velocity": 78,
+        "duration": 158,
+        "time": "3.041",
+        "timeDelta": "-0.005"
+      },
+      "metadata": {
+        "index": 40,
+        "helixAngle": "456.0°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-3.76",
+      "y": "-36.50",
+      "z": "-0.37",
+      "size": "1.14",
+      "depth": "0.32",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 54,
+        "duration": 158,
+        "time": "3.041",
+        "timeDelta": "0.000"
+      },
+      "metadata": {
+        "index": 41,
+        "helixAngle": "560.1°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "3.02",
+      "y": "-38.00",
+      "z": "-1.62",
+      "size": "1.07",
+      "depth": "0.12",
+      "color": "0xe06c52",
+      "colorName": "hsl(11.162790697674412, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 72,
+        "velocity": 48,
+        "duration": 61,
+        "time": "3.147",
+        "timeDelta": "0.106"
+      },
+      "metadata": {
+        "index": 42,
+        "helixAngle": "679.1°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-2.67",
+      "y": "-39.50",
+      "z": "-1.98",
+      "size": "1.21",
+      "depth": "0.15",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 60,
+        "duration": 77,
+        "time": "3.205",
+        "timeDelta": "0.058"
+      },
+      "metadata": {
+        "index": 43,
+        "helixAngle": "588.1°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-3.54",
+      "y": "-41.00",
+      "z": "2.87",
+      "size": "1.43",
+      "depth": "0.31",
+      "color": "0x52e0a8",
+      "colorName": "hsl(156.27906976744188, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 46,
+        "velocity": 79,
+        "duration": 153,
+        "time": "3.205",
+        "timeDelta": "0.000"
+      },
+      "metadata": {
+        "index": 44,
+        "helixAngle": "512.1°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-0.96",
+      "y": "-42.50",
+      "z": "-2.88",
+      "size": "1.13",
+      "depth": "0.15",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 53,
+        "duration": 76,
+        "time": "3.285",
+        "timeDelta": "0.080"
+      },
+      "metadata": {
+        "index": 45,
+        "helixAngle": "616.2°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "2.01",
+      "y": "-44.00",
+      "z": "-2.46",
+      "size": "1.61",
+      "depth": "0.17",
+      "color": "0xd0e052",
+      "colorName": "hsl(66.97674418604652, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 62,
+        "velocity": 94,
+        "duration": 87,
+        "time": "3.279",
+        "timeDelta": "-0.006"
+      },
+      "metadata": {
+        "index": 46,
+        "helixAngle": "660.2°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-1.58",
+      "y": "-45.50",
+      "z": "-2.67",
+      "size": "1.42",
+      "depth": "0.63",
+      "color": "0x58e052",
+      "colorName": "hsl(117.20930232558139, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 53,
+        "velocity": 78,
+        "duration": 317,
+        "time": "3.115",
+        "timeDelta": "-0.165"
+      },
+      "metadata": {
+        "index": 47,
+        "helixAngle": "606.7°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "2.11",
+      "y": "-47.00",
+      "z": "4.40",
+      "size": "1.06",
+      "depth": "0.36",
+      "color": "0xe05252",
+      "colorName": "hsl(0, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 74,
+        "velocity": 47,
+        "duration": 179,
+        "time": "3.279",
+        "timeDelta": "0.165"
+      },
+      "metadata": {
+        "index": 48,
+        "helixAngle": "778.2°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "2.16",
+      "y": "-48.50",
+      "z": "4.37",
+      "size": "1.02",
+      "depth": "0.24",
+      "color": "0xe06c52",
+      "colorName": "hsl(11.162790697674412, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 72,
+        "velocity": 44,
+        "duration": 118,
+        "time": "3.365",
+        "timeDelta": "0.085"
+      },
+      "metadata": {
+        "index": 49,
+        "helixAngle": "777.3°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-2.22",
+      "y": "-50.00",
+      "z": "-2.33",
+      "size": "1.48",
+      "depth": "0.33",
+      "color": "0x52e0a8",
+      "colorName": "hsl(156.27906976744188, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 46,
+        "velocity": 83,
+        "duration": 164,
+        "time": "3.365",
+        "timeDelta": "0.000"
+      },
+      "metadata": {
+        "index": 50,
+        "helixAngle": "596.3°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "3.77",
+      "y": "-51.50",
+      "z": "-0.35",
+      "size": "1.09",
+      "depth": "0.33",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 50,
+        "duration": 164,
+        "time": "3.365",
+        "timeDelta": "0.000"
+      },
+      "metadata": {
+        "index": 51,
+        "helixAngle": "700.3°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "3.64",
+      "y": "-53.00",
+      "z": "2.65",
+      "size": "1.33",
+      "depth": "0.42",
+      "color": "0xd0e052",
+      "colorName": "hsl(66.97674418604652, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 62,
+        "velocity": 70,
+        "duration": 210,
+        "time": "3.370",
+        "timeDelta": "0.005"
+      },
+      "metadata": {
+        "index": 52,
+        "helixAngle": "744.4°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "0.58",
+      "y": "-54.50",
+      "z": "-2.96",
+      "size": "1.40",
+      "depth": "0.30",
+      "color": "0x52e0a8",
+      "colorName": "hsl(156.27906976744188, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 46,
+        "velocity": 76,
+        "duration": 148,
+        "time": "3.535",
+        "timeDelta": "0.166"
+      },
+      "metadata": {
+        "index": 53,
+        "helixAngle": "638.4°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "3.70",
+      "y": "-56.00",
+      "z": "2.52",
+      "size": "1.11",
+      "depth": "0.30",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 52,
+        "duration": 148,
+        "time": "3.535",
+        "timeDelta": "0.000"
+      },
+      "metadata": {
+        "index": 54,
+        "helixAngle": "742.4°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "4.00",
+      "y": "-57.50",
+      "z": "0.93",
+      "size": "1.39",
+      "depth": "0.48",
+      "color": "0x58e052",
+      "colorName": "hsl(117.20930232558139, 70%, 60%)",
+      "type": "circle",
+      "note": {
+        "pitch": 53,
+        "velocity": 75,
+        "duration": 240,
+        "time": "3.445",
+        "timeDelta": "-0.091"
+      },
+      "metadata": {
+        "index": 55,
+        "helixAngle": "718.9°",
+        "isAccord": false
+      }
+    },
+    {
+      "x": "1.66",
+      "y": "-59.00",
+      "z": "4.64",
+      "size": "1.39",
+      "depth": "0.17",
+      "color": "0xb5e052",
+      "colorName": "hsl(78.13953488372094, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 60,
+        "velocity": 75,
+        "duration": 87,
+        "time": "3.604",
+        "timeDelta": "0.159"
+      },
+      "metadata": {
+        "index": 56,
+        "helixAngle": "785.5°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-3.99",
+      "y": "-60.50",
+      "z": "0.69",
+      "size": "0.97",
+      "depth": "0.25",
+      "color": "0xe05252",
+      "colorName": "hsl(0, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 74,
+        "velocity": 40,
+        "duration": 123,
+        "time": "3.599",
+        "timeDelta": "-0.005"
+      },
+      "metadata": {
+        "index": 57,
+        "helixAngle": "904.5°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "3.02",
+      "y": "-62.00",
+      "z": "3.62",
+      "size": "1.30",
+      "depth": "0.14",
+      "color": "0x58e052",
+      "colorName": "hsl(117.20930232558139, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 53,
+        "velocity": 68,
+        "duration": 72,
+        "time": "3.695",
+        "timeDelta": "0.096"
+      },
+      "metadata": {
+        "index": 58,
+        "helixAngle": "761.0°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-1.20",
+      "y": "-63.50",
+      "z": "4.81",
+      "size": "1.16",
+      "depth": "0.26",
+      "color": "0xb5e052",
+      "colorName": "hsl(78.13953488372094, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 60,
+        "velocity": 56,
+        "duration": 128,
+        "time": "3.695",
+        "timeDelta": "0.000"
+      },
+      "metadata": {
+        "index": 59,
+        "helixAngle": "827.5°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-1.14",
+      "y": "-65.00",
+      "z": "4.83",
+      "size": "1.04",
+      "depth": "0.32",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 46,
+        "duration": 159,
+        "time": "3.690",
+        "timeDelta": "-0.005"
+      },
+      "metadata": {
+        "index": 60,
+        "helixAngle": "826.6°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "3.44",
+      "y": "-66.50",
+      "z": "3.04",
+      "size": "1.36",
+      "depth": "0.33",
+      "color": "0x52e0a8",
+      "colorName": "hsl(156.27906976744188, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 46,
+        "velocity": 73,
+        "duration": 164,
+        "time": "3.690",
+        "timeDelta": "0.000"
+      },
+      "metadata": {
+        "index": 61,
+        "helixAngle": "750.6°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "2.85",
+      "y": "-68.00",
+      "z": "3.81",
+      "size": "1.28",
+      "depth": "0.32",
+      "color": "0x52e0a8",
+      "colorName": "hsl(156.27906976744188, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 46,
+        "velocity": 66,
+        "duration": 158,
+        "time": "3.860",
+        "timeDelta": "0.171"
+      },
+      "metadata": {
+        "index": 62,
+        "helixAngle": "764.6°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-1.44",
+      "y": "-69.50",
+      "z": "4.73",
+      "size": "1.30",
+      "depth": "0.51",
+      "color": "0x58e052",
+      "colorName": "hsl(117.20930232558139, 70%, 60%)",
+      "type": "circle",
+      "note": {
+        "pitch": 53,
+        "velocity": 68,
+        "duration": 255,
+        "time": "3.770",
+        "timeDelta": "-0.091"
+      },
+      "metadata": {
+        "index": 63,
+        "helixAngle": "831.1°",
+        "isAccord": false
+      }
+    },
+    {
+      "x": "-3.82",
+      "y": "-71.00",
+      "z": "2.19",
+      "size": "1.07",
+      "depth": "0.37",
+      "color": "0x9be052",
+      "colorName": "hsl(89.30232558139535, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 58,
+        "velocity": 48,
+        "duration": 184,
+        "time": "3.855",
+        "timeDelta": "0.085"
+      },
+      "metadata": {
+        "index": 64,
+        "helixAngle": "882.7°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-0.23",
+      "y": "-72.50",
+      "z": "-2.99",
+      "size": "1.34",
+      "depth": "0.40",
+      "color": "0xe08752",
+      "colorName": "hsl(22.32558139534885, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 70,
+        "velocity": 71,
+        "duration": 199,
+        "time": "3.855",
+        "timeDelta": "0.000"
+      },
+      "metadata": {
+        "index": 65,
+        "helixAngle": "986.7°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-3.03",
+      "y": "-74.00",
+      "z": "-1.61",
+      "size": "1.28",
+      "depth": "0.26",
+      "color": "0xd0e052",
+      "colorName": "hsl(66.97674418604652, 70%, 60%)",
+      "type": "circle",
+      "note": {
+        "pitch": 62,
+        "velocity": 66,
+        "duration": 128,
+        "time": "3.934",
+        "timeDelta": "0.079"
+      },
+      "metadata": {
+        "index": 66,
+        "helixAngle": "940.7°",
+        "isAccord": false
+      }
+    },
+    {
+      "x": "3.63",
+      "y": "-75.50",
+      "z": "2.67",
+      "size": "1.02",
+      "depth": "0.18",
+      "color": "0x5279e0",
+      "colorName": "hsl(223.25581395348837, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 34,
+        "velocity": 44,
+        "duration": 92,
+        "time": "4.057",
+        "timeDelta": "0.123"
+      },
+      "metadata": {
+        "index": 67,
+        "helixAngle": "744.7°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-4.00",
+      "y": "-77.00",
+      "z": "0.91",
+      "size": "0.98",
+      "depth": "0.24",
+      "color": "0x58e052",
+      "colorName": "hsl(117.20930232558139, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 53,
+        "velocity": 41,
+        "duration": 122,
+        "time": "4.100",
+        "timeDelta": "0.043"
+      },
+      "metadata": {
+        "index": 68,
+        "helixAngle": "901.3°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-3.19",
+      "y": "-78.50",
+      "z": "3.42",
+      "size": "1.19",
+      "depth": "0.41",
+      "color": "0x52e0a8",
+      "colorName": "hsl(156.27906976744188, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 46,
+        "velocity": 58,
+        "duration": 205,
+        "time": "4.025",
+        "timeDelta": "-0.075"
+      },
+      "metadata": {
+        "index": 69,
+        "helixAngle": "862.8°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "3.96",
+      "y": "-80.00",
+      "z": "0.43",
+      "size": "0.93",
+      "depth": "0.19",
+      "color": "0xe06c52",
+      "colorName": "hsl(11.162790697674412, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 72,
+        "velocity": 36,
+        "duration": 97,
+        "time": "4.201",
+        "timeDelta": "0.176"
+      },
+      "metadata": {
+        "index": 70,
+        "helixAngle": "1071.8°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-3.40",
+      "y": "-81.50",
+      "z": "3.10",
+      "size": "1.30",
+      "depth": "0.32",
+      "color": "0x52e0d0",
+      "colorName": "hsl(173.02325581395348, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 43,
+        "velocity": 68,
+        "duration": 158,
+        "time": "4.191",
+        "timeDelta": "-0.010"
+      },
+      "metadata": {
+        "index": 71,
+        "helixAngle": "868.3°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "1.36",
+      "y": "-83.00",
+      "z": "-2.76",
+      "size": "1.22",
+      "depth": "0.27",
+      "color": "0xb5e052",
+      "colorName": "hsl(78.13953488372094, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 60,
+        "velocity": 61,
+        "duration": 133,
+        "time": "4.259",
+        "timeDelta": "0.069"
+      },
+      "metadata": {
+        "index": 72,
+        "helixAngle": "1009.9°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "0.25",
+      "y": "-84.50",
+      "z": "4.99",
+      "size": "1.02",
+      "depth": "0.38",
+      "color": "0x5252e0",
+      "colorName": "hsl(240, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 31,
+        "velocity": 44,
+        "duration": 189,
+        "time": "4.249",
+        "timeDelta": "-0.010"
+      },
+      "metadata": {
+        "index": 73,
+        "helixAngle": "806.4°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-2.68",
+      "y": "-86.00",
+      "z": "-1.97",
+      "size": "1.00",
+      "depth": "0.16",
+      "color": "0x52e08d",
+      "colorName": "hsl(145.11627906976744, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 48,
+        "velocity": 42,
+        "duration": 82,
+        "time": "4.461",
+        "timeDelta": "0.212"
+      },
+      "metadata": {
+        "index": 74,
+        "helixAngle": "947.9°",
+        "isAccord": true
+      }
+    },
+    {
+      "x": "-3.64",
+      "y": "-87.50",
+      "z": "-0.66",
+      "size": "1.31",
+      "depth": "0.38",
+      "color": "0x52e0d0",
+      "colorName": "hsl(173.02325581395348, 70%, 60%)",
+      "type": "circle",
+      "note": {
+        "pitch": 43,
+        "velocity": 69,
+        "duration": 189,
+        "time": "4.355",
+        "timeDelta": "-0.106"
+      },
+      "metadata": {
+        "index": 75,
+        "helixAngle": "924.4°",
+        "isAccord": false
+      }
+    },
+    {
+      "x": "1.59",
+      "y": "-89.00",
+      "z": "-2.67",
+      "size": "1.30",
+      "depth": "0.25",
+      "color": "0x58e052",
+      "colorName": "hsl(117.20930232558139, 70%, 60%)",
+      "type": "halfPipe",
+      "note": {
+        "pitch": 53,
+        "velocity": 68,
+        "duration": 123,
+        "time": "4.424",
+        "timeDelta": "0.069"
+      },
+      "metadata": {
+        "index": 76,
+        "helixAngle": "1013.5°",
+        "isAccord": true
+      }
+    }
+  ]
+}
