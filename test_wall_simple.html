@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Mur Simple - Physique Ball</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: monospace; }
+        canvas { display: block; }
+        #ui {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 100;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover { background: #45a049; }
+        #debug {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            max-width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h3>🎯 Test Mur Simple</h3>
+        <button onclick="resetBall()">🔄 Reset Ball</button>
+        <button onclick="toggleCamera()">📷 Toggle Camera</button>
+        <button onclick="addPlatform()">➕ Add Platform</button>
+        <div style="margin-top: 10px;">
+            <label>Gravité: <input type="range" id="gravity" min="5" max="20" value="9.8" step="0.1" onchange="updateGravity(this.value)"> <span id="gVal">-9.8</span></label><br>
+            <label>Friction: <input type="range" id="friction" min="0" max="1" value="0.4" step="0.05" onchange="updateFriction(this.value)"> <span id="fVal">0.4</span></label><br>
+            <label>Restitution: <input type="range" id="restitution" min="0" max="1" value="0.3" step="0.05" onchange="updateRestitution(this.value)"> <span id="rVal">0.3</span></label><br>
+            <label>Wall Angle: <input type="range" id="wallAngle" min="0" max="60" value="35" step="5" onchange="updateWallAngle(this.value)"> <span id="aVal">35°</span></label>
+        </div>
+    </div>
+    
+    <div id="debug">
+        <div id="debugInfo">Ball pos: (0, 0, 0)</div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+            "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import * as CANNON from 'cannon-es';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ========== SCENE ==========
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a3e);
+        scene.fog = new THREE.Fog(0x1a1a3e, 10, 100);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // ========== LIGHTS ==========
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        dirLight.position.set(5, 10, 5);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // ========== PHYSICS ==========
+        const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.8, 0) });
+        
+        const wallMaterial = new CANNON.Material('wall');
+        const ballMaterial = new CANNON.Material('ball');
+        const platformMaterial = new CANNON.Material('platform');
+        
+        const wallContact = new CANNON.ContactMaterial(ballMaterial, wallMaterial, {
+            friction: 0.4,
+            restitution: 0.3
+        });
+        world.addContactMaterial(wallContact);
+        
+        const platformContact = new CANNON.ContactMaterial(ballMaterial, platformMaterial, {
+            friction: 0.3,
+            restitution: 0.5
+        });
+        world.addContactMaterial(platformContact);
+
+        // ========== BALL ==========
+        const ballRadius = 0.5;
+        const ballGeom = new THREE.SphereGeometry(ballRadius, 32, 32);
+        const ballMat = new THREE.MeshStandardMaterial({
+            color: 0xffff00,
+            emissive: 0xffff00,
+            emissiveIntensity: 0.5,
+            metalness: 0.3,
+            roughness: 0.3
+        });
+        const ballMesh = new THREE.Mesh(ballGeom, ballMat);
+        ballMesh.castShadow = true;
+        scene.add(ballMesh);
+
+        const ballBody = new CANNON.Body({
+            mass: 1,
+            shape: new CANNON.Sphere(ballRadius),
+            material: ballMaterial,
+            linearDamping: 0.1,
+            angularDamping: 0.1
+        });
+        world.addBody(ballBody);
+
+        // Ball light
+        const ballLight = new THREE.PointLight(0xffff00, 2, 10);
+        scene.add(ballLight);
+
+        // ========== WALL ==========
+        let wallAngle = 35; // degrés
+        let wallBodies = [];
+        let wallMeshes = [];
+        
+        function createWall() {
+            // Clear old wall
+            wallMeshes.forEach(m => scene.remove(m));
+            wallBodies.forEach(b => world.removeBody(b));
+            wallMeshes = [];
+            wallBodies = [];
+            
+            const angleRad = wallAngle * Math.PI / 180;
+            const wallLength = 50;
+            const wallWidth = 10;
+            const wallThickness = 0.5;
+            
+            // Visual mesh
+            const geometry = new THREE.BoxGeometry(wallWidth, wallThickness, wallLength);
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x2a4a7a,
+                transparent: true,
+                opacity: 0.5,
+                side: THREE.DoubleSide,
+                metalness: 0.7,
+                roughness: 0.3
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.receiveShadow = true;
+            
+            // Position: Centre du mur
+            const wallY = 10 - (wallLength/2) * Math.sin(angleRad);
+            const wallZ = -(wallLength/2) * Math.cos(angleRad);
+            mesh.position.set(0, wallY, wallZ);
+            mesh.rotation.x = angleRad;
+            
+            scene.add(mesh);
+            wallMeshes.push(mesh);
+            
+            // Physics body
+            const shape = new CANNON.Box(new CANNON.Vec3(wallWidth/2, wallThickness/2, wallLength/2));
+            const body = new CANNON.Body({ mass: 0, material: wallMaterial });
+            body.addShape(shape);
+            body.position.copy(mesh.position);
+            body.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), angleRad);
+            world.addBody(body);
+            wallBodies.push(body);
+            
+            // Grid on wall to visualize
+            const gridHelper = new THREE.GridHelper(wallWidth, 10, 0x444444, 0x222222);
+            gridHelper.position.copy(mesh.position);
+            gridHelper.rotation.x = angleRad;
+            scene.add(gridHelper);
+            wallMeshes.push(gridHelper);
+            
+            console.log(`✓ Wall created: angle=${wallAngle}°, y=${wallY.toFixed(2)}, z=${wallZ.toFixed(2)}`);
+        }
+
+        // ========== PLATFORMS ON WALL ==========
+        const platforms = [];
+        const platformBodies = [];
+        
+        function addPlatform() {
+            const count = platforms.length;
+            const angleRad = wallAngle * Math.PI / 180;
+            
+            // Position le long du mur - DIRECTEMENT SUR LA SURFACE
+            const distAlongWall = count * 3; // Distance le long du mur
+            const x = Math.sin(count * 0.5) * 2; // Zigzag horizontal
+            
+            // Point sur le mur incliné
+            // Le mur commence à y=10, z=0 et descend avec l'angle
+            const startY = 15;
+            const startZ = 0;
+            
+            // Position sur le mur après distAlongWall
+            const y = startY - distAlongWall * Math.sin(angleRad);
+            const z = startZ - distAlongWall * Math.cos(angleRad);
+            
+            // Visual - Cylindre plat orienté DANS le plan du mur
+            const geometry = new THREE.CylinderGeometry(0.8, 0.8, 0.2, 16);
+            const color = new THREE.Color().setHSL(count * 0.1, 1.0, 0.5);
+            const material = new THREE.MeshStandardMaterial({
+                color: color,
+                emissive: color,
+                emissiveIntensity: 0.8,
+                metalness: 0.5,
+                roughness: 0.3
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(x, y, z);
+            
+            // Rotation pour être DANS le plan du mur
+            // Cylindre par défaut = axe Y vertical
+            // On veut qu'il soit perpendiculaire au mur (pointe vers la caméra)
+            mesh.rotation.x = Math.PI / 2 - angleRad; // Perpendiculaire au mur
+            
+            mesh.castShadow = true;
+            scene.add(mesh);
+            platforms.push(mesh);
+            
+            // Ajouter un petit cylindre pour montrer la connexion au mur
+            const connectorGeom = new THREE.CylinderGeometry(0.1, 0.1, 0.3, 8);
+            const connectorMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
+            const connector = new THREE.Mesh(connectorGeom, connectorMat);
+            connector.position.set(x, y, z);
+            connector.rotation.x = angleRad; // Suit l'inclinaison du mur
+            scene.add(connector);
+            platforms.push(connector); // Pour le cleanup
+            
+            // Physics - Même orientation
+            const shape = new CANNON.Cylinder(0.8, 0.8, 0.2, 16);
+            const body = new CANNON.Body({ 
+                mass: 0, 
+                material: platformMaterial 
+            });
+            body.addShape(shape);
+            body.position.set(x, y, z);
+            
+            // Quaternion pour rotation
+            const quat = new CANNON.Quaternion();
+            quat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2 - angleRad);
+            body.quaternion.copy(quat);
+            
+            world.addBody(body);
+            platformBodies.push(body);
+            
+            console.log(`✓ Platform ${count} sur mur (${wallAngle}°) : (${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)})`);
+        }
+
+        // ========== CAMERA MODES ==========
+        let cameraMode = 'follow'; // 'follow', 'orbit', 'side'
+        
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enabled = false;
+        
+        window.toggleCamera = function() {
+            if (cameraMode === 'follow') {
+                cameraMode = 'orbit';
+                controls.enabled = true;
+                console.log('📷 Camera: Orbit (manual)');
+            } else if (cameraMode === 'orbit') {
+                cameraMode = 'side';
+                controls.enabled = false;
+                console.log('📷 Camera: Side view (fixed)');
+            } else {
+                cameraMode = 'follow';
+                controls.enabled = false;
+                console.log('📷 Camera: Follow ball');
+            }
+        };
+
+        // ========== CONTROLS ==========
+        window.resetBall = function() {
+            const angleRad = wallAngle * Math.PI / 180;
+            ballBody.position.set(0, 15, 0);
+            ballBody.velocity.set(0, 0, -5); // Vers le mur
+            ballBody.angularVelocity.set(0, 0, 0);
+            console.log('🔄 Ball reset');
+        };
+
+        window.updateGravity = function(val) {
+            world.gravity.set(0, -parseFloat(val), 0);
+            document.getElementById('gVal').textContent = `-${val}`;
+        };
+
+        window.updateFriction = function(val) {
+            wallContact.friction = parseFloat(val);
+            document.getElementById('fVal').textContent = val;
+        };
+
+        window.updateRestitution = function(val) {
+            wallContact.restitution = parseFloat(val);
+            document.getElementById('rVal').textContent = val;
+        };
+
+        window.updateWallAngle = function(val) {
+            wallAngle = parseFloat(val);
+            document.getElementById('aVal').textContent = `${val}°`;
+            createWall();
+            // Reposition platforms
+            platforms.forEach((p, i) => scene.remove(p));
+            platformBodies.forEach(b => world.removeBody(b));
+            platforms.length = 0;
+            platformBodies.length = 0;
+        };
+
+        window.addPlatform = addPlatform;
+
+        // ========== INIT ==========
+        createWall();
+        
+        // Add 5 platforms by default
+        for (let i = 0; i < 5; i++) {
+            addPlatform();
+        }
+        
+        resetBall();
+        
+        // ========== ANIMATION ==========
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Physics step
+            world.step(1/60);
+            
+            // Sync ball
+            ballMesh.position.copy(ballBody.position);
+            ballMesh.quaternion.copy(ballBody.quaternion);
+            ballLight.position.copy(ballBody.position);
+            
+            // Camera modes
+            if (cameraMode === 'follow') {
+                // Camera suit la balle de face (devant le mur)
+                const ballPos = ballBody.position;
+                camera.position.set(
+                    ballPos.x,           // Même x que la balle
+                    ballPos.y + 2,       // Un peu au-dessus
+                    ballPos.z + 8        // Devant (vers la caméra)
+                );
+                camera.lookAt(ballPos.x, ballPos.y, ballPos.z);
+            } else if (cameraMode === 'side') {
+                // Vue latérale fixe
+                camera.position.set(15, 10, -10);
+                camera.lookAt(0, 5, -10);
+            }
+            // 'orbit' mode uses OrbitControls (manual)
+            
+            // Update debug
+            const v = ballBody.velocity;
+            document.getElementById('debugInfo').innerHTML = `
+                Ball: (${ballBody.position.x.toFixed(1)}, ${ballBody.position.y.toFixed(1)}, ${ballBody.position.z.toFixed(1)})<br>
+                Velocity: (${v.x.toFixed(1)}, ${v.y.toFixed(1)}, ${v.z.toFixed(1)}) | Speed: ${Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z).toFixed(1)}<br>
+                Camera: ${cameraMode}<br>
+                Platforms: ${platforms.length}
+            `;
+            
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+        
+        console.log('✅ Test Wall Simple initialized');
+        console.log('🎮 Controls:');
+        console.log('  - Reset Ball: Lance la balle vers le mur');
+        console.log('  - Toggle Camera: Change vue (follow/orbit/side)');
+        console.log('  - Add Platform: Ajoute plateforme sur le mur');
+        console.log('  - Sliders: Ajuste physique en temps réel');
+    </script>
+</body>
+</html>

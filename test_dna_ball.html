@@ -138,8 +138,22 @@
 
         // ========== THREE.JS SCENE ==========
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0a0a1a);
-        scene.fog = new THREE.Fog(0x0a0a1a, 30, 80);
+        
+        // Gradient background (plus clair pour voir les structures)
+        const canvas = document.createElement('canvas');
+        canvas.width = 2;
+        canvas.height = 256;
+        const ctx2d = canvas.getContext('2d');
+        const gradient = ctx2d.createLinearGradient(0, 0, 0, 256);
+        gradient.addColorStop(0, '#1a1a3e'); // Bleu foncé en haut
+        gradient.addColorStop(0.5, '#2a2a4e'); // Bleu moyen
+        gradient.addColorStop(1, '#0a0a2e'); // Noir-bleu en bas
+        ctx2d.fillStyle = gradient;
+        ctx2d.fillRect(0, 0, 2, 256);
+        const bgTexture = new THREE.CanvasTexture(canvas);
+        scene.background = bgTexture;
+        
+        scene.fog = new THREE.Fog(0x1a1a3e, 40, 100);
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
         camera.position.set(0, 15, 20);
@@ -165,46 +179,79 @@
         controls.maxDistance = 50;
         controls.minDistance = 5;
 
-        // Lighting
-        scene.add(new THREE.AmbientLight(0x202040, 0.8));
-        const keyLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        // Lighting - Plus lumineux pour voir les structures
+        scene.add(new THREE.AmbientLight(0x404060, 1.2));
+        
+        const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
         keyLight.position.set(10, 20, 10);
         keyLight.castShadow = true;
+        keyLight.shadow.mapSize.width = 2048;
+        keyLight.shadow.mapSize.height = 2048;
         scene.add(keyLight);
+        
+        // Fill light pour éclairer les côtés
+        const fillLight = new THREE.DirectionalLight(0x6666ff, 0.6);
+        fillLight.position.set(-10, 10, -10);
+        scene.add(fillLight);
+        
+        // Rim light pour contours
+        const rimLight = new THREE.DirectionalLight(0xff66ff, 0.4);
+        rimLight.position.set(0, -10, 5);
+        scene.add(rimLight);
 
         // ========== PHYSICS ==========
-        const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -12, 0) });
+        const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.8, 0) });  // Gravité réaliste
         const platformMaterial = new CANNON.Material('platform');
         const ballMaterial = new CANNON.Material('ball');
         const contact = new CANNON.ContactMaterial(platformMaterial, ballMaterial, {
             friction: 0.1,
-            restitution: 0.8
+            restitution: 0.3  // Peu de rebond pour glisser
         });
         world.addContactMaterial(contact);
 
-        // ========== BALL ==========
-        const bubbleGeom = new THREE.SphereGeometry(0.5, 32, 32);
+        // ========== BALL - Plus visible ==========
+        const bubbleGeom = new THREE.SphereGeometry(0.6, 32, 32);
         const bubbleMat = new THREE.MeshPhysicalMaterial({
             color: 0x00ffff,
-            transmission: 0.9,
-            opacity: 0.3,
-            metalness: 0.1,
-            roughness: 0.1,
+            emissive: 0x00ffff,
+            emissiveIntensity: 0.6,
+            transmission: 0.7,
+            opacity: 0.8,
+            metalness: 0.3,
+            roughness: 0.2,
             transparent: true
         });
         const bubbleMesh = new THREE.Mesh(bubbleGeom, bubbleMat);
         scene.add(bubbleMesh);
+        
+        // Anneau externe pour mieux voir la boule
+        const ringGeom = new THREE.TorusGeometry(0.7, 0.08, 16, 32);
+        const ringMat = new THREE.MeshStandardMaterial({
+            color: 0xffff00,
+            emissive: 0xffff00,
+            emissiveIntensity: 1.0
+        });
+        const ringMesh = new THREE.Mesh(ringGeom, ringMat);
+        ringMesh.rotation.x = Math.PI / 2;
+        scene.add(ringMesh);
 
         const ballBody = new CANNON.Body({
             mass: 1,
-            shape: new CANNON.Sphere(0.5),
+            shape: new CANNON.Sphere(0.6),
             material: ballMaterial,
-            linearDamping: 0.01
+            linearDamping: 0.2,    // Amortissement pour contrôler vitesse
+            angularDamping: 0.1
         });
         world.addBody(ballBody);
 
-        const ballLight = new THREE.PointLight(0x00ffff, 4, 12);
+        const ballLight = new THREE.PointLight(0x00ffff, 8, 15);
         scene.add(ballLight);
+        
+        // Spotlight qui suit la boule
+        const spotLight = new THREE.SpotLight(0xffffff, 2.0, 20, Math.PI / 6, 0.5);
+        spotLight.position.set(0, 10, 0);
+        scene.add(spotLight);
+        scene.add(spotLight.target);
 
         // ========== LOAD DNA DATA ==========
         let platforms = [];
@@ -216,17 +263,24 @@
 
         async function loadDNAData() {
             try {
-                const response = await fetch('data/leo_10s_dna.json');
+                const response = await fetch('data/leo_10s_wall.json');
                 dnaData = await response.json();
                 
                 console.log('🧬 DNA Data loaded:', dnaData.metadata);
                 console.log('Platforms:', dnaData.platforms.length);
-                console.log('Climax:', dnaData.analysis.climaxIndex);
+                
+                // analysis est optionnel (DNA a climaxIndex, guaranteed path non)
+                if (dnaData.analysis?.climaxIndex !== undefined) {
+                    console.log('Climax:', dnaData.analysis.climaxIndex);
+                }
                 
                 createDNAPlatforms();
+                createWallSegments();  // Créer le mur !
                 
+                const pathType = dnaData.metadata.generator?.includes('WALL') ? 'Mur Incliné' : 
+                                dnaData.metadata.generator?.includes('GUARANTEED') ? 'Chemin Garanti' : 'ADN Musical';
                 document.getElementById('stats').textContent = 
-                    `${dnaData.platforms.length} plateformes | ADN Musical`;
+                    `${dnaData.platforms.length} plateformes | ${pathType}`;
                 
                 return true;
             } catch (error) {
@@ -274,25 +328,55 @@
                 const material = new THREE.MeshStandardMaterial({
                     color: colorHex,
                     emissive: colorHex,
-                    emissiveIntensity: 0.4,
-                    metalness: 0.3,
-                    roughness: 0.4
+                    emissiveIntensity: 0.7,
+                    metalness: 0.5,
+                    roughness: 0.3,
+                    transparent: true,
+                    opacity: 0.9
                 });
+                
+                // Wireframe pour voir la structure
+                const wireframeGeo = geometry.clone();
+                const wireframeMat = new THREE.MeshBasicMaterial({
+                    color: 0xffffff,
+                    wireframe: true,
+                    opacity: 0.3,
+                    transparent: true
+                });
+                const wireframe = new THREE.Mesh(wireframeGeo, wireframeMat);
 
                 const mesh = new THREE.Mesh(geometry, material);
                 mesh.position.set(x, y, z);
                 mesh.rotation.x = Math.PI / 2; // Horizontal
                 mesh.castShadow = true;
-                mesh.userData.midiNote = data.note.pitch;
+                mesh.userData.midiNote = data.midiNote || data.note?.pitch;
                 mesh.userData.platformIndex = i;
                 scene.add(mesh);
                 platforms.push(mesh);
+                
+                // Add wireframe
+                wireframe.position.copy(mesh.position);
+                wireframe.rotation.copy(mesh.rotation);
+                wireframe.visible = false; // Toggle avec bouton
+                scene.add(wireframe);
+                mesh.userData.wireframe = wireframe;
 
-                // Light
-                const light = new THREE.PointLight(colorHex, 2, 6);
+                // Light - Plus intense
+                const light = new THREE.PointLight(colorHex, 3.5, 8);
                 light.position.set(x, y, z - 1);
                 scene.add(light);
                 platformLights.push(light);
+                
+                // Helper pour voir la structure (petit sphere)
+                const helperGeom = new THREE.SphereGeometry(0.15, 8, 8);
+                const helperMat = new THREE.MeshBasicMaterial({ 
+                    color: colorHex,
+                    transparent: true,
+                    opacity: 0.5
+                });
+                const helper = new THREE.Mesh(helperGeom, helperMat);
+                helper.position.set(x, y, z);
+                scene.add(helper);
 
                 // Physics body
                 let physicsShape;
@@ -326,7 +410,7 @@
                 
                 const platform = platforms[idx];
                 const data = dnaData.platforms[idx];
-                const note = data.note.pitch;
+                const note = data.midiNote || data.note?.pitch;
                 const velocity = Math.min(Math.abs(event.contact.getImpactVelocityAlongNormal()) / 15, 1.0);
                 
                 playNote(note, 0.5, velocity);
@@ -338,26 +422,105 @@
                 document.getElementById('stats').textContent = 
                     `Note ${notesPlayed}/${dnaData.platforms.length} | Pitch: ${note}`;
                 
-                console.log(`🎵 [${idx}] Note ${note} - time: ${data.note.time}s`);
+                const noteTime = data.time || data.note?.time || 0;
+                console.log(`🎵 [${idx}] Note ${note} - time: ${noteTime}s`);
             }
         });
+
+        // ========== CREATE WALL SEGMENTS ==========
+        const wallBodies = [];
+        const wallMeshes = [];
+        
+        function createWallSegments() {
+            if (!dnaData.wallSegments) return;
+            
+            // Clear existing walls
+            wallMeshes.forEach(m => scene.remove(m));
+            wallBodies.forEach(b => world.removeBody(b));
+            wallMeshes.length = 0;
+            wallBodies.length = 0;
+            
+            const wallMaterial = new CANNON.Material('wall');
+            const wallContact = new CANNON.ContactMaterial(ballMaterial, wallMaterial, {
+                friction: dnaData.metadata.physics?.wallFriction || 0.4,
+                restitution: dnaData.metadata.physics?.restitution || 0.3
+            });
+            world.addContactMaterial(wallContact);
+            
+            dnaData.wallSegments.forEach((seg, i) => {
+                // Calculate dimensions
+                const dx = seg.end.x - seg.start.x;
+                const dy = seg.end.y - seg.start.y;
+                const dz = seg.end.z - seg.start.z;
+                const length = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                
+                const midX = (seg.start.x + seg.end.x) / 2;
+                const midY = (seg.start.y + seg.end.y) / 2;
+                const midZ = (seg.start.z + seg.end.z) / 2;
+                
+                // Visual mesh - large transparent wall
+                const geometry = new THREE.BoxGeometry(seg.width, seg.thickness, length);
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0x2a2a4e,
+                    transparent: true,
+                    opacity: 0.3,
+                    side: THREE.DoubleSide,
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                
+                // Position and rotate
+                mesh.position.set(midX, midY, midZ);
+                
+                // Rotation to align with segment
+                const angle = Math.atan2(dz, dy);
+                mesh.rotation.x = angle;
+                
+                scene.add(mesh);
+                wallMeshes.push(mesh);
+                
+                // Physics body
+                const shape = new CANNON.Box(new CANNON.Vec3(seg.width/2, seg.thickness/2, length/2));
+                const body = new CANNON.Body({ mass: 0, material: wallMaterial });
+                body.addShape(shape);
+                body.position.set(midX, midY, midZ);
+                body.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), angle);
+                world.addBody(body);
+                wallBodies.push(body);
+            });
+            
+            console.log(`✓ ${wallBodies.length} segments de mur créés`);
+        }
 
         function resetBall() {
             if (!dnaData || platforms.length === 0) return;
             
-            const firstPlatform = dnaData.platforms[0];
-            const x = parseFloat(firstPlatform.x);
-            const y = parseFloat(firstPlatform.y) + 3;
-            const z = parseFloat(firstPlatform.z);
+            // Utiliser ballStart du metadata si disponible
+            const ballStart = dnaData.metadata?.ballStart;
+            if (ballStart) {
+                ballBody.position.set(ballStart.x, ballStart.y, ballStart.z);
+                ballBody.velocity.set(
+                    ballStart.velocity.x,
+                    ballStart.velocity.y,
+                    ballStart.velocity.z
+                );
+                console.log(`Reset: ball at (${ballStart.x}, ${ballStart.y}, ${ballStart.z})`);
+                console.log(`Velocity: (${ballStart.velocity.x}, ${ballStart.velocity.y}, ${ballStart.velocity.z})`);
+            } else {
+                // Fallback: première plateforme + 3 unités de hauteur
+                const firstPlatform = dnaData.platforms[0];
+                const x = parseFloat(firstPlatform.x);
+                const y = parseFloat(firstPlatform.y) + 3;
+                const z = parseFloat(firstPlatform.z);
+                ballBody.position.set(x, y, z);
+                ballBody.velocity.set(1.5, 0, 0);
+                console.log(`Reset: ball at (${x}, ${y}, ${z}) [fallback]`);
+            }
             
-            ballBody.position.set(x, y, z);
-            ballBody.velocity.set(1.5, 0, 0);
             ballBody.angularVelocity.set(0, 0, 0);
-            
             collisionHistory.clear();
             notesPlayed = 0;
-            
-            console.log(`Reset: ball at (${x}, ${y}, ${z})`);
         }
 
         // ========== CONTROLS ==========
@@ -379,13 +542,21 @@
         document.getElementById('viewBtn').addEventListener('click', () => {
             dnaView = !dnaView;
             if (dnaView) {
-                camera.position.set(0, 25, 0);
+                camera.position.set(0, 30, 0);
                 camera.lookAt(0, 0, 0);
                 document.getElementById('viewBtn').textContent = '🎬 Vue Jeu';
+                // Montrer les wireframes en vue DNA
+                platforms.forEach(p => {
+                    if (p.userData.wireframe) p.userData.wireframe.visible = true;
+                });
             } else {
                 camera.position.set(0, 15, 20);
                 camera.lookAt(0, 10, 0);
                 document.getElementById('viewBtn').textContent = '👁️ Vue DNA';
+                // Cacher les wireframes en vue jeu
+                platforms.forEach(p => {
+                    if (p.userData.wireframe) p.userData.wireframe.visible = false;
+                });
             }
         });
 
@@ -404,12 +575,20 @@
                 world.step(fixedTimeStep, deltaTime, 3);
                 
                 bubbleMesh.position.copy(ballBody.position);
+                ringMesh.position.copy(ballBody.position);
+                ringMesh.rotation.z += 0.05; // Rotation pour effet visuel
                 ballLight.position.copy(ballBody.position);
+                spotLight.target.position.copy(ballBody.position);
                 
                 if (!dnaView) {
-                    camera.position.x = THREE.MathUtils.lerp(camera.position.x, ballBody.position.x * 0.2, 0.05);
-                    camera.position.y = THREE.MathUtils.lerp(camera.position.y, ballBody.position.y + 5, 0.05);
-                    camera.lookAt(ballBody.position.x * 0.2, ballBody.position.y, 0);
+                    // Caméra suit VRAIMENT la boule
+                    const targetPos = new THREE.Vector3(
+                        ballBody.position.x - 5,
+                        ballBody.position.y + 3,
+                        ballBody.position.z + 8
+                    );
+                    camera.position.lerp(targetPos, 0.08);
+                    camera.lookAt(ballBody.position);
                 }
             }
             
