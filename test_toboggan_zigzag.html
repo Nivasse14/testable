@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>🎢 Toboggan Zigzag - Trajectoire Calculée</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: monospace; }
+        canvas { display: block; }
+        #ui {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 100;
+            max-width: 300px;
+        }
+        button {
+            background: #FF6B35;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px 0;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            width: 100%;
+        }
+        button:hover { background: #FF8555; }
+        #debug {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            color: white;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 11px;
+            max-width: 250px;
+        }
+        .stat { color: #4ECDC4; margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h3 style="margin:0 0 10px 0; color:#4ECDC4;">🎢 Rampes Zigzag</h3>
+        <button onclick="startBall()">▶️ START</button>
+        <button onclick="toggleCamera()">📷 <span id="camMode">Side</span></button>
+        <div class="stat">Plateformes: <span id="platformCount">0</span></div>
+        <div class="stat">Rampes: <span id="slideCount">0</span></div>
+        <div class="stat">Notes: <span id="noteCount">0/0</span></div>
+    </div>
+    
+    <div id="debug">
+        <div id="debugInfo">Calcul trajectoires...</div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+            "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import * as CANNON from 'cannon-es';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ========== CONFIGURATION ==========
+        const CONFIG = {
+            gravity: -9.8,
+            ballRadius: 0.5,
+            platformWidth: 2.5,
+            platformDepth: 2.5,
+            platformHeight: 0.2,
+            rampWidth: 2.0,
+            rampLength: 5,
+            startHeight: 20,
+            levelDrop: 3.5,  // Chute entre niveaux
+            horizontalOffset: 6,  // Distance gauche-droite
+            rampAngle: 25,  // Angle rampe en degrés
+            slideFriction: 0.2,
+            platformFriction: 0.5,
+            restitution: 0.3,
+            numLevels: 8
+        };
+
+        // ========== SCENE ==========
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a1a);
+        scene.fog = new THREE.Fog(0x0a0a1a, 20, 150);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // ========== LIGHTS ==========
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        dirLight.position.set(10, 20, 5);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        const pointLight = new THREE.PointLight(0x4ECDC4, 2, 50);
+        pointLight.position.set(0, 15, 0);
+        scene.add(pointLight);
+
+        // ========== PHYSICS ==========
+        const world = new CANNON.World({ gravity: new CANNON.Vec3(0, CONFIG.gravity, 0) });
+        
+        const slideMaterial = new CANNON.Material('slide');
+        const ballMaterial = new CANNON.Material('ball');
+        const platformMaterial = new CANNON.Material('platform');
+        
+        world.addContactMaterial(new CANNON.ContactMaterial(ballMaterial, slideMaterial, {
+            friction: CONFIG.slideFriction,
+            restitution: CONFIG.restitution
+        }));
+        
+        world.addContactMaterial(new CANNON.ContactMaterial(ballMaterial, platformMaterial, {
+            friction: CONFIG.platformFriction,
+            restitution: CONFIG.restitution
+        }));
+
+        // ========== BALL ==========
+        const ballGeom = new THREE.SphereGeometry(CONFIG.ballRadius, 32, 32);
+        const ballMat = new THREE.MeshStandardMaterial({
+            color: 0xffff00,
+            emissive: 0xffff00,
+            emissiveIntensity: 0.6,
+            metalness: 0.4,
+            roughness: 0.3
+        });
+        const ballMesh = new THREE.Mesh(ballGeom, ballMat);
+        ballMesh.castShadow = true;
+        scene.add(ballMesh);
+
+        const ballBody = new CANNON.Body({
+            mass: 1,
+            shape: new CANNON.Sphere(CONFIG.ballRadius),
+            material: ballMaterial,
+            linearDamping: 0.05,
+            angularDamping: 0.05
+        });
+        world.addBody(ballBody);
+
+        const ballLight = new THREE.PointLight(0xffff00, 3, 10);
+        scene.add(ballLight);
+
+        // ========== TRAJECTORY CALCULATOR ==========
+        function calculateRampPosition(platformStart, platformEnd) {
+            // Calcule la position et rotation d'une rampe plate entre 2 plateformes
+            const dx = platformEnd.x - platformStart.x;
+            const dy = platformEnd.y - platformStart.y;
+            const dz = platformEnd.z - platformStart.z;
+            
+            const midX = (platformStart.x + platformEnd.x) / 2;
+            const midY = (platformStart.y + platformEnd.y) / 2;
+            const midZ = (platformStart.z + platformEnd.z) / 2;
+            
+            const length = Math.sqrt(dx*dx + dy*dy + dz*dz);
+            const angleY = Math.atan2(dx, dz);
+            const angleX = -Math.atan2(dy, Math.sqrt(dx*dx + dz*dz));
+            
+            return {
+                x: midX,
+                y: midY,
+                z: midZ,
+                length,
+                rotationX: angleX,
+                rotationY: angleY
+            };
+        }
+
+        // ========== PARCOURS GENERATOR ==========
+        const platforms = [];
+        const platformBodies = [];
+        const ramps = [];
+        const rampBodies = [];
+        let collisionHistory = new Set();
+        let notesPlayed = 0;
+
+        function generateZigzagCourse() {
+            const course = [];
+            let currentX = -CONFIG.horizontalOffset / 2;  // Commence à gauche
+            let currentY = CONFIG.startHeight;
+            let direction = 1; // 1 = droite, -1 = gauche
+
+            for (let i = 0; i < CONFIG.numLevels; i++) {
+                // Plateforme CARRÉE
+                const platform = {
+                    id: i,
+                    x: currentX,
+                    y: currentY,
+                    z: 0,
+                    type: 'platform',
+                    note: 60 + (i % 12)
+                };
+                course.push(platform);
+
+                // Si ce n'est pas la dernière, créer une RAMPE PLATE
+                if (i < CONFIG.numLevels - 1) {
+                    const nextX = currentX + (direction * CONFIG.horizontalOffset);
+                    const nextY = currentY - CONFIG.levelDrop;
+
+                    const ramp = {
+                        id: `ramp_${i}`,
+                        startX: currentX,
+                        startY: currentY - CONFIG.platformHeight,
+                        startZ: 0,
+                        endX: nextX,
+                        endY: nextY + CONFIG.platformHeight,
+                        endZ: 0,
+                        type: 'ramp'
+                    };
+                    course.push(ramp);
+
+                    currentX = nextX;
+                    currentY = nextY;
+                    direction *= -1;
+                }
+            }
+
+            return course;
+        }
+
+        function createPlatform(data) {
+            const { x, y, z, id, note } = data;
+            
+            // Visual - PLATEFORME CARRÉE
+            const geometry = new THREE.BoxGeometry(
+                CONFIG.platformWidth,
+                CONFIG.platformHeight,
+                CONFIG.platformDepth
+            );
+            const color = new THREE.Color().setHSL((id / CONFIG.numLevels), 0.8, 0.5);
+            const material = new THREE.MeshStandardMaterial({
+                color,
+                emissive: color,
+                emissiveIntensity: 0.5,
+                metalness: 0.6,
+                roughness: 0.3
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(x, y, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.userData = { platformId: id, note };
+            scene.add(mesh);
+            platforms.push(mesh);
+
+            // Light
+            const light = new THREE.PointLight(color, 2, 5);
+            light.position.set(x, y + 1, z);
+            scene.add(light);
+            mesh.userData.light = light;
+
+            // Physics - BOX
+            const shape = new CANNON.Box(new CANNON.Vec3(
+                CONFIG.platformWidth / 2,
+                CONFIG.platformHeight / 2,
+                CONFIG.platformDepth / 2
+            ));
+            const body = new CANNON.Body({ mass: 0, material: platformMaterial });
+            body.addShape(shape);
+            body.position.set(x, y, z);
+            body.userData = { platformId: id, note };
+            world.addBody(body);
+            platformBodies.push(body);
+        }
+
+        function createRamp(data) {
+            const { startX, startY, startZ, endX, endY, endZ, id } = data;
+            
+            const rampPos = calculateRampPosition(
+                { x: startX, y: startY, z: startZ },
+                { x: endX, y: endY, z: endZ }
+            );
+
+            // Visual - RAMPE PLATE
+            const geometry = new THREE.BoxGeometry(
+                CONFIG.rampWidth,
+                0.15,  // Épaisseur rampe
+                rampPos.length
+            );
+            const material = new THREE.MeshStandardMaterial({
+                color: 0x44aa88,
+                metalness: 0.7,
+                roughness: 0.4,
+                side: THREE.DoubleSide
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(rampPos.x, rampPos.y, rampPos.z);
+            mesh.rotation.x = rampPos.rotationX;
+            mesh.rotation.y = rampPos.rotationY;
+            mesh.receiveShadow = true;
+            mesh.castShadow = true;
+            scene.add(mesh);
+            ramps.push(mesh);
+
+            // Physics - BOX incliné
+            const shape = new CANNON.Box(new CANNON.Vec3(
+                CONFIG.rampWidth / 2,
+                0.15 / 2,
+                rampPos.length / 2
+            ));
+            const body = new CANNON.Body({ mass: 0, material: slideMaterial });
+            body.addShape(shape);
+            body.position.set(rampPos.x, rampPos.y, rampPos.z);
+            body.quaternion.setFromEuler(rampPos.rotationX, rampPos.rotationY, 0);
+            world.addBody(body);
+            rampBodies.push(body);
+        }
+
+        // ========== BUILD COURSE ==========
+        const courseData = generateZigzagCourse();
+        let platformCount = 0;
+        let rampCount = 0;
+
+        courseData.forEach(item => {
+            if (item.type === 'platform') {
+                createPlatform(item);
+                platformCount++;
+            } else if (item.type === 'ramp') {
+                createRamp(item);
+                rampCount++;
+            }
+        });
+
+        document.getElementById('platformCount').textContent = platformCount;
+        document.getElementById('slideCount').textContent = rampCount;
+        document.getElementById('noteCount').textContent = `0/${platformCount}`;
+
+        console.log(`✅ Parcours créé: ${platformCount} plateformes, ${rampCount} rampes`);
+
+        // ========== COLLISION DETECTION ==========
+        ballBody.addEventListener('collide', (event) => {
+            const body = event.body;
+            if (body.userData && body.userData.platformId !== undefined) {
+                const id = body.userData.platformId;
+                if (!collisionHistory.has(id)) {
+                    collisionHistory.add(id);
+                    notesPlayed++;
+                    
+                    const platform = platforms[id];
+                    if (platform.userData.light) {
+                        platform.userData.light.intensity = 8;
+                        setTimeout(() => {
+                            platform.userData.light.intensity = 2;
+                        }, 150);
+                    }
+                    
+                    document.getElementById('noteCount').textContent = `${notesPlayed}/${platformCount}`;
+                    console.log(`🎵 Platform ${id} hit! (${notesPlayed}/${platformCount})`);
+                }
+            }
+        });
+
+        // ========== CAMERA ==========
+        let cameraMode = 'side';  // Par défaut: vue latérale
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enabled = false;
+
+        window.toggleCamera = function() {
+            if (cameraMode === 'side') {
+                cameraMode = 'follow';
+                controls.enabled = false;
+            } else if (cameraMode === 'follow') {
+                cameraMode = 'orbit';
+                controls.enabled = true;
+            } else {
+                cameraMode = 'side';
+                controls.enabled = false;
+            }
+            document.getElementById('camMode').textContent = cameraMode.charAt(0).toUpperCase() + cameraMode.slice(1);
+        };
+
+        // ========== CONTROLS ==========
+        let startTime = null;
+
+        window.startBall = function() {
+            const firstPlatform = courseData[0];
+            // Commence VRAIMENT EN HAUT
+            ballBody.position.set(
+                firstPlatform.x,
+                CONFIG.startHeight + 3,  // Bien au-dessus
+                firstPlatform.z
+            );
+            ballBody.velocity.set(0, 0, 0);  // Immobile au départ
+            ballBody.angularVelocity.set(0, 0, 0);
+            collisionHistory.clear();
+            notesPlayed = 0;
+            startTime = Date.now();
+            document.getElementById('noteCount').textContent = `0/${platformCount}`;
+            console.log('🎢 Ball started from top!');
+        };
+
+        // ========== ANIMATION ==========
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            world.step(1/60);
+            
+            // Sync ball
+            ballMesh.position.copy(ballBody.position);
+            ballMesh.quaternion.copy(ballBody.quaternion);
+            ballLight.position.copy(ballBody.position);
+            
+            // Camera modes - EXACTEMENT comme test_ramp_simple.html
+            const ballPos = ballBody.position;
+            if (cameraMode === 'follow') {
+                // Camera suit la balle - vue de face
+                camera.position.set(
+                    ballPos.x,
+                    ballPos.y + 3,
+                    ballPos.z + 10
+                );
+                camera.lookAt(ballPos.x, ballPos.y, ballPos.z);
+            } else if (cameraMode === 'side') {
+                // Vue latérale QUI SUIT LA BOULE
+                camera.position.set(
+                    15,              // Côté droit (fixe)
+                    ballPos.y + 5,   // Suit la hauteur de la boule + offset
+                    ballPos.z        // Suit la profondeur de la boule
+                );
+                camera.lookAt(ballPos.x, ballPos.y, ballPos.z); // Regarde la boule
+            }
+            
+            // Debug
+            const v = ballBody.velocity;
+            const speed = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
+            const elapsed = startTime ? ((Date.now() - startTime) / 1000).toFixed(1) : '0.0';
+            
+            document.getElementById('debugInfo').innerHTML = `
+                Pos: (${ballPos.x.toFixed(1)}, ${ballPos.y.toFixed(1)}, ${ballPos.z.toFixed(1)})<br>
+                Vel: (${v.x.toFixed(1)}, ${v.y.toFixed(1)}, ${v.z.toFixed(1)})<br>
+                Speed: ${speed.toFixed(1)} m/s<br>
+                Time: ${elapsed}s<br>
+                Notes: ${notesPlayed}/${platformCount}<br>
+                Cam: ${cameraMode}
+            `;
+            
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start
+        animate();
+        console.log('✅ Ready! Click START to begin');
+    </script>
+</body>
+</html>

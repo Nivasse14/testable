@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>🎢 Zigzag Viewer - Plan Calculé</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: monospace; }
+        canvas { display: block; }
+        #ui {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 100;
+        }
+        button {
+            background: #FF6B35;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px 0;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            width: 100%;
+        }
+        button:hover { background: #FF8555; }
+        #debug {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            color: white;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 11px;
+        }
+        .stat { color: #4ECDC4; margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h3 style="margin:0 0 10px 0; color:#4ECDC4;">🎢 Zigzag Viewer</h3>
+        <button onclick="startBall()">▶️ START</button>
+        <button onclick="toggleCamera()">📷 <span id="camMode">Side</span></button>
+        <div class="stat">Plateformes: <span id="platformCount">0</span></div>
+        <div class="stat">Rampes: <span id="rampCount">0</span></div>
+        <div class="stat">Notes: <span id="noteCount">0/0</span></div>
+    </div>
+    
+    <div id="debug">
+        <div id="debugInfo">Chargement...</div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+            "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import * as CANNON from 'cannon-es';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ========== SCENE ==========
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a3e);
+        scene.fog = new THREE.Fog(0x1a1a3e, 10, 100);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // ========== LIGHTS ==========
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(5, 10, 5);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // ========== PHYSICS ==========
+        const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.8, 0) });
+        
+        const rampMaterial = new CANNON.Material('ramp');
+        const ballMaterial = new CANNON.Material('ball');
+        const platformMaterial = new CANNON.Material('platform');
+        
+        world.addContactMaterial(new CANNON.ContactMaterial(ballMaterial, rampMaterial, {
+            friction: 0.2,
+            restitution: 0.4
+        }));
+        
+        world.addContactMaterial(new CANNON.ContactMaterial(ballMaterial, platformMaterial, {
+            friction: 0.4,
+            restitution: 0.4
+        }));
+
+        // ========== BALL ==========
+        let ballRadius = 0.5; // Sera remplacé par JSON
+        let ballGeom, ballMat, ballMesh, ballBody, ballLight;
+        
+        function createBall(radius) {
+            // Supprimer l'ancienne balle si elle existe
+            if (ballMesh) {
+                scene.remove(ballMesh);
+                scene.remove(ballLight);
+                world.removeBody(ballBody);
+            }
+            
+            ballRadius = radius;
+            ballGeom = new THREE.SphereGeometry(ballRadius, 32, 32);
+            ballMat = new THREE.MeshStandardMaterial({
+                color: 0xffff00,
+                emissive: 0xffff00,
+                emissiveIntensity: 0.5,
+                metalness: 0.3,
+                roughness: 0.3,
+                wireframe: true  // Afficher le wireframe de la balle
+            });
+            ballMesh = new THREE.Mesh(ballGeom, ballMat);
+            ballMesh.castShadow = true;
+            scene.add(ballMesh);
+
+            ballBody = new CANNON.Body({
+                mass: 1,
+                shape: new CANNON.Sphere(ballRadius),
+                material: ballMaterial,
+                linearDamping: 0.05,
+                angularDamping: 0.05
+            });
+            world.addBody(ballBody);
+
+            ballLight = new THREE.PointLight(0xffff00, 3, 10);
+            scene.add(ballLight);
+        }
+        
+        // Créer balle par défaut
+        createBall(0.5);
+
+        // ========== MUR À CARREAUX ==========
+        function createTiledWall() {
+            if (!pathData || !pathData.metadata.config.visual.wall.enabled) return;
+            
+            const wallConfig = pathData.metadata.config.visual.wall;
+            const platforms = pathData.platforms;
+            const minZ = Math.min(...platforms.map(p => p.z)) - 2;
+            const maxZ = Math.max(...platforms.map(p => p.z)) + 2;
+            const minY = Math.min(...platforms.map(p => p.y)) - 2;
+            const maxY = Math.max(...platforms.map(p => p.y)) + 2;
+            
+            const tileSize = wallConfig.tileSize;
+            const wallX = wallConfig.position.x;
+            
+            // Créer une grille de carreaux
+            for (let y = minY; y < maxY; y += tileSize) {
+                for (let z = minZ; z < maxZ; z += tileSize) {
+                    const isDark = (Math.floor(y / tileSize) + Math.floor(z / tileSize)) % 2 === 0;
+                    const color = isDark ? wallConfig.colors.dark : wallConfig.colors.light;
+                    
+                    const geometry = new THREE.PlaneGeometry(tileSize, tileSize);
+                    const material = new THREE.MeshStandardMaterial({
+                        color: color,
+                        metalness: wallConfig.material.metalness,
+                        roughness: wallConfig.material.roughness,
+                        side: THREE.DoubleSide
+                    });
+                    
+                    const tile = new THREE.Mesh(geometry, material);
+                    tile.position.set(wallX, y + tileSize/2, z + tileSize/2);
+                    tile.rotation.y = Math.PI / 2;
+                    tile.receiveShadow = true;
+                    
+                    if (wallConfig.showGrid) {
+                        const edges = new THREE.EdgesGeometry(geometry);
+                        const lineMat = new THREE.LineBasicMaterial({ color: 0x1a1a3e, linewidth: 2 });
+                        const wireframe = new THREE.LineSegments(edges, lineMat);
+                        tile.add(wireframe);
+                    }
+                    
+                    scene.add(tile);
+                }
+            }
+        }
+        
+        // ========== FORMES PERSONNALISÉES ==========
+        function createCustomShapes() {
+            if (!pathData || !pathData.metadata.config.visual.customShapes) return;
+            
+            pathData.metadata.config.visual.customShapes.forEach(shape => {
+                if (!shape.enabled) return;
+                
+                let geometry;
+                
+                switch(shape.type) {
+                    case 'torus':
+                        geometry = new THREE.TorusGeometry(
+                            shape.radius, shape.tube, 
+                            shape.radialSegments, shape.tubularSegments
+                        );
+                        break;
+                    case 'torusKnot':
+                        geometry = new THREE.TorusKnotGeometry(
+                            shape.radius, shape.tube,
+                            shape.tubularSegments, shape.radialSegments,
+                            shape.p, shape.q
+                        );
+                        break;
+                    case 'ring':
+                        geometry = new THREE.RingGeometry(
+                            shape.innerRadius, shape.outerRadius, shape.thetaSegments
+                        );
+                        break;
+                    case 'sphere':
+                        geometry = new THREE.SphereGeometry(
+                            shape.radius, shape.widthSegments, shape.heightSegments
+                        );
+                        break;
+                    case 'box':
+                        geometry = new THREE.BoxGeometry(shape.width, shape.height, shape.depth);
+                        break;
+                    case 'cylinder':
+                        geometry = new THREE.CylinderGeometry(
+                            shape.radiusTop, shape.radiusBottom, shape.height, shape.radialSegments
+                        );
+                        break;
+                    case 'plane':
+                        geometry = new THREE.PlaneGeometry(shape.width, shape.height);
+                        break;
+                    default:
+                        return;
+                }
+                
+                const materialProps = {
+                    color: shape.color,
+                    metalness: shape.material.metalness,
+                    roughness: shape.material.roughness,
+                    wireframe: shape.material.wireframe || false
+                };
+                
+                if (shape.material.transparent) {
+                    materialProps.transparent = true;
+                    materialProps.opacity = shape.material.opacity;
+                }
+                
+                if (shape.material.side === 'double') {
+                    materialProps.side = THREE.DoubleSide;
+                }
+                
+                const material = new THREE.MeshStandardMaterial(materialProps);
+                const mesh = new THREE.Mesh(geometry, material);
+                
+                mesh.position.set(shape.position.x, shape.position.y, shape.position.z);
+                mesh.rotation.set(shape.rotation.x, shape.rotation.y, shape.rotation.z);
+                
+                scene.add(mesh);
+            });
+        }
+
+        // ========== DATA ==========
+        let pathData = null;
+        const platforms = [];
+        const platformBodies = [];
+        const ramps = [];
+        const rampBodies = [];
+        const collisionHistory = new Set();
+        let notesPlayed = 0;
+        let startTime = null;
+
+        async function loadPathData() {
+            try {
+                const response = await fetch('data/zigzag_path.json');
+                pathData = await response.json();
+                
+                console.log('📊 Path data loaded:', pathData.metadata);
+                
+                // Recréer la balle avec le rayon du JSON
+                if (pathData.metadata.ball && pathData.metadata.ball.radius) {
+                    createBall(pathData.metadata.ball.radius);
+                    console.log('🎯 Balle: rayon =', ballRadius, ', vitesse =', pathData.metadata.ballStart.velocity);
+                }
+                
+                createTiledWall();  // Créer le mur à carreaux en arrière-plan
+                createCustomShapes();  // Créer les formes personnalisées
+                createPlatforms();
+                createRamps();
+                
+                document.getElementById('platformCount').textContent = pathData.platforms.length;
+                document.getElementById('rampCount').textContent = pathData.ramps.length;
+                document.getElementById('noteCount').textContent = `0/${pathData.platforms.length}`;
+                document.getElementById('debugInfo').textContent = 'Ready! Click START';
+                
+                return true;
+            } catch (error) {
+                console.error('❌ Error loading path data:', error);
+                document.getElementById('debugInfo').textContent = 'Error loading data';
+                return false;
+            }
+        }
+
+        function createPlatforms() {
+            pathData.platforms.forEach((data) => {
+                const { x, y, z, radius, height, width, depth, shape, id, note } = data;
+                const colorHex = parseInt(data.color);
+                
+                // Visual - Géométrie selon la forme
+                let geometry;
+                let physicsShape;
+                
+                switch(shape) {
+                    case 'box':
+                        geometry = new THREE.BoxGeometry(width, height, depth);
+                        physicsShape = new CANNON.Box(new CANNON.Vec3(width/2, height/2, depth/2));
+                        break;
+                    case 'sphere':
+                        geometry = new THREE.SphereGeometry(radius, 16, 16);
+                        physicsShape = new CANNON.Sphere(radius);
+                        break;
+                    case 'cylinder':
+                    default:
+                        geometry = new THREE.CylinderGeometry(radius, radius, height, 16);
+                        physicsShape = new CANNON.Cylinder(radius, radius, height, 16);
+                        break;
+                }
+                
+                const visConfig = pathData.metadata.config.visual.platforms;
+                
+                const material = new THREE.MeshStandardMaterial({
+                    color: colorHex,
+                    emissive: colorHex,
+                    emissiveIntensity: visConfig.emissiveIntensity,
+                    metalness: visConfig.metalness,
+                    roughness: visConfig.roughness,
+                    wireframe: visConfig.wireframe
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(x, y, z);
+                mesh.castShadow = visConfig.castShadow;
+                mesh.receiveShadow = visConfig.receiveShadow;
+                mesh.userData = { platformId: id, note };
+                scene.add(mesh);
+                platforms.push(mesh);
+                
+                // Connecteur au mur (bras de support)
+                const supportsConfig = pathData.metadata.config.visual.supports;
+                if (supportsConfig.enabled) {
+                    const wallX = pathData.metadata.config.visual.wall.position.x;
+                    const armLength = Math.abs(x - wallX);
+                    
+                    let armGeometry;
+                    if (supportsConfig.shape === 'cylinder') {
+                        armGeometry = new THREE.CylinderGeometry(
+                            supportsConfig.radius, supportsConfig.radius, armLength, 8
+                        );
+                    } else if (supportsConfig.shape === 'box') {
+                        armGeometry = new THREE.BoxGeometry(
+                            armLength, supportsConfig.height, supportsConfig.width
+                        );
+                    }
+                    
+                    const armMaterial = new THREE.MeshStandardMaterial({
+                        color: supportsConfig.color,
+                        metalness: supportsConfig.material.metalness,
+                        roughness: supportsConfig.material.roughness,
+                        wireframe: supportsConfig.material.wireframe
+                    });
+                    const arm = new THREE.Mesh(armGeometry, armMaterial);
+                    arm.position.set((x + wallX) / 2, y, z);
+                    arm.rotation.z = Math.PI / 2;  // Horizontal
+                    arm.castShadow = true;
+                    scene.add(arm);
+                }
+                
+                // Light
+                const lightsConfig = pathData.metadata.config.visual.lights;
+                if (lightsConfig.enabled) {
+                    const light = new THREE.PointLight(
+                        colorHex, lightsConfig.intensity, lightsConfig.distance
+                    );
+                    light.position.set(x, y + 1, z);
+                    scene.add(light);
+                    mesh.userData.light = light;
+                }
+                
+                // Physics
+                const body = new CANNON.Body({ mass: 0, material: platformMaterial });
+                body.addShape(physicsShape);
+                body.position.set(x, y, z);
+                
+                // Rotation pour cylindre
+                if (shape === 'cylinder') {
+                    body.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2);
+                }
+                
+                body.userData = { platformId: id, note };
+                world.addBody(body);
+                platformBodies.push(body);
+            });
+            
+            console.log(`✅ ${platforms.length} platforms created`);
+        }
+
+        function createRamps() {
+            pathData.ramps.forEach((ramp) => {
+                const { midX, midY, midZ, width, thickness, length, angleX, angleY, id } = ramp;
+                
+                // Visual
+                const geometry = new THREE.BoxGeometry(width, thickness, length);
+                const rampConfig = pathData.metadata.config.visual.ramps;
+                const material = new THREE.MeshStandardMaterial({
+                    color: rampConfig.color,
+                    metalness: rampConfig.metalness,
+                    roughness: rampConfig.roughness,
+                    wireframe: rampConfig.wireframe
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(midX, midY, midZ);
+                mesh.rotation.x = angleX;
+                mesh.rotation.y = angleY;
+                mesh.receiveShadow = rampConfig.receiveShadow;
+                mesh.castShadow = rampConfig.castShadow;
+                scene.add(mesh);
+                ramps.push(mesh);
+                
+                // Physics
+                const shape = new CANNON.Box(new CANNON.Vec3(width/2, thickness/2, length/2));
+                const body = new CANNON.Body({ mass: 0, material: rampMaterial });
+                body.addShape(shape);
+                body.position.set(midX, midY, midZ);
+                body.quaternion.setFromEuler(angleX, angleY, 0);
+                world.addBody(body);
+                rampBodies.push(body);
+            });
+            
+            console.log(`✅ ${ramps.length} ramps created`);
+        }
+
+        // Collision detection
+        ballBody.addEventListener('collide', (event) => {
+            const body = event.body;
+            if (body.userData && body.userData.platformId !== undefined) {
+                const id = body.userData.platformId;
+                if (!collisionHistory.has(id)) {
+                    collisionHistory.add(id);
+                    notesPlayed++;
+                    
+                    const platform = platforms[id];
+                    if (platform.userData.light) {
+                        const lightsConfig = pathData.metadata.config.visual.lights;
+                        platform.userData.light.intensity = lightsConfig.flashIntensity;
+                        setTimeout(() => {
+                            platform.userData.light.intensity = lightsConfig.intensity;
+                        }, lightsConfig.flashDuration);
+                    }
+                    
+                    document.getElementById('noteCount').textContent = `${notesPlayed}/${pathData.platforms.length}`;
+                    console.log(`🎵 Platform ${id} hit! (${notesPlayed}/${pathData.platforms.length})`);
+                }
+            }
+        });
+
+        // ========== CAMERA ==========
+        let cameraMode = 'side';
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enabled = false;
+        
+        window.toggleCamera = function() {
+            if (cameraMode === 'side') {
+                cameraMode = 'follow';
+                controls.enabled = false;
+            } else if (cameraMode === 'follow') {
+                cameraMode = 'orbit';
+                controls.enabled = true;
+            } else {
+                cameraMode = 'side';
+                controls.enabled = false;
+            }
+            document.getElementById('camMode').textContent = cameraMode.charAt(0).toUpperCase() + cameraMode.slice(1);
+        };
+
+        // ========== CONTROLS ==========
+        window.startBall = function() {
+            if (!pathData) return;
+            
+            const ballStart = pathData.metadata.ballStart;
+            ballBody.position.set(ballStart.x, ballStart.y, ballStart.z);
+            ballBody.velocity.set(ballStart.velocity.x, ballStart.velocity.y, ballStart.velocity.z);
+            ballBody.angularVelocity.set(0, 0, 0);
+            collisionHistory.clear();
+            notesPlayed = 0;
+            startTime = Date.now();
+            document.getElementById('noteCount').textContent = `0/${pathData.platforms.length}`;
+            console.log('🎢 Ball started!');
+        };
+
+        // ========== ANIMATION ==========
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            world.step(1/60);
+            
+            // Sync ball
+            ballMesh.position.copy(ballBody.position);
+            ballMesh.quaternion.copy(ballBody.quaternion);
+            ballLight.position.copy(ballBody.position);
+            
+            // Camera modes
+            const ballPos = ballBody.position;
+            if (cameraMode === 'side') {
+                // Vue latérale QUI SUIT LA BOULE
+                camera.position.set(
+                    15,              // Côté droit (fixe)
+                    ballPos.y + 5,   // Suit la hauteur de la boule + offset
+                    ballPos.z        // Suit la profondeur de la boule
+                );
+                camera.lookAt(ballPos.x, ballPos.y, ballPos.z);
+            } else if (cameraMode === 'follow') {
+                // Camera suit la balle - vue de face
+                camera.position.set(
+                    ballPos.x,
+                    ballPos.y + 3,
+                    ballPos.z + 10
+                );
+                camera.lookAt(ballPos.x, ballPos.y, ballPos.z);
+            }
+            
+            // Debug
+            const v = ballBody.velocity;
+            const speed = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
+            const elapsed = startTime ? ((Date.now() - startTime) / 1000).toFixed(2) : '0.00';
+            
+            if (pathData) {
+                document.getElementById('debugInfo').innerHTML = `
+                    Ball: (${ballPos.x.toFixed(1)}, ${ballPos.y.toFixed(1)}, ${ballPos.z.toFixed(1)})<br>
+                    Speed: ${speed.toFixed(1)} m/s<br>
+                    Notes: ${notesPlayed}/${pathData.platforms.length}<br>
+                    Time: ${elapsed}s<br>
+                    Camera: ${cameraMode}
+                `;
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // ========== INIT ==========
+        loadPathData().then(success => {
+            if (success) {
+                console.log('✅ Ready! Click START to begin');
+            }
+        });
+
+        animate();
+    </script>
+</body>
+</html>

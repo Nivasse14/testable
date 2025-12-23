@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>🎢 Zigzag Tobogans - Musical Ball</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: monospace; }
+        canvas { display: block; }
+        #ui {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 100;
+            max-width: 250px;
+        }
+        button {
+            background: #FF6B35;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            margin: 5px 0;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            width: 100%;
+            font-weight: bold;
+        }
+        button:hover { background: #FF8555; }
+        #stats {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #4ECDC4;
+        }
+        #debug {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            color: white;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h3 style="margin:0 0 10px 0; color:#4ECDC4;">🎢 Tubes Zigzag</h3>
+        <button onclick="startBall()">▶️ START</button>
+        <button onclick="resetBall()">🔄 RESET au tube</button>
+        <button onclick="toggleCamera()">📷 <span id="camMode">Side</span></button>
+        <button onclick="toggleAudio()">🔊 <span id="audioMode">OFF</span></button>
+        <div id="stats">Chargement...</div>
+    </div>
+    
+    <div id="debug">
+        <div id="debugInfo">Ready</div>
+    </div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+            "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import * as CANNON from 'cannon-es';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ========== SCENE ==========
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a1a);
+        scene.fog = new THREE.Fog(0x0a0a1a, 20, 150);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // ========== LIGHTS ==========
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(10, 20, 5);
+        dirLight.castShadow = true;
+        scene.add(dirLight);
+
+        // ========== AUDIO ==========
+        let audioContext = null;
+        let audioEnabled = false;
+
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            return audioContext;
+        }
+
+        function midiToFreq(midi) {
+            return 440 * Math.pow(2, (midi - 69) / 12);
+        }
+
+        function playNote(midiNote, duration = 0.3, velocity = 0.8) {
+            if (!audioEnabled || !audioContext) return;
+            
+            const freq = midiToFreq(midiNote);
+            const osc = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+            osc.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            const now = audioContext.currentTime;
+            gainNode.gain.setValueAtTime(velocity * 0.3, now);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, now + duration);
+            
+            osc.start(now);
+            osc.stop(now + duration);
+        }
+
+        window.toggleAudio = function() {
+            if (!audioEnabled) {
+                initAudio();
+                audioEnabled = true;
+                document.getElementById('audioMode').textContent = 'ON';
+            } else {
+                audioEnabled = false;
+                document.getElementById('audioMode').textContent = 'OFF';
+            }
+        };
+
+        // ========== PHYSICS ==========
+        const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.8, 0) });
+        
+        const slideMaterial = new CANNON.Material('slide');
+        const ballMaterial = new CANNON.Material('ball');
+        const platformMaterial = new CANNON.Material('platform');
+        
+        const slideContact = new CANNON.ContactMaterial(ballMaterial, slideMaterial, {
+            friction: 0.15,
+            restitution: 0.3
+        });
+        world.addContactMaterial(slideContact);
+        
+        const platformContact = new CANNON.ContactMaterial(ballMaterial, platformMaterial, {
+            friction: 0.4,
+            restitution: 0.5
+        });
+        world.addContactMaterial(platformContact);
+
+        // ========== BALL ==========
+        const ballRadius = 0.5;
+        const ballGeom = new THREE.SphereGeometry(ballRadius, 32, 32);
+        const ballMat = new THREE.MeshStandardMaterial({
+            color: 0xffff00,
+            emissive: 0xffff00,
+            emissiveIntensity: 0.5,
+            metalness: 0.3,
+            roughness: 0.3
+        });
+        const ballMesh = new THREE.Mesh(ballGeom, ballMat);
+        ballMesh.castShadow = true;
+        scene.add(ballMesh);
+
+        const ballBody = new CANNON.Body({
+            mass: 1,
+            shape: new CANNON.Sphere(ballRadius),
+            material: ballMaterial,
+            linearDamping: 0.1,
+            angularDamping: 0.1
+        });
+        world.addBody(ballBody);
+
+        const ballLight = new THREE.PointLight(0xffff00, 3, 10);
+        scene.add(ballLight);
+
+        // ========== DATA ==========
+        let zigzagData = null;
+        const platforms = [];
+        const platformBodies = [];
+        const slides = [];
+        const slideBodies = [];
+        let notesPlayed = 0;
+        let startTime = null;
+        const collisionHistory = new Set();
+
+        async function loadZigzagData() {
+            try {
+                const response = await fetch('data/leo_10s_zigzag_tubes.json');
+                zigzagData = await response.json();
+                
+                console.log('🎢 Zigzag data loaded:', zigzagData.metadata);
+                console.log('Platforms:', zigzagData.platforms.length);
+                console.log('Slides:', zigzagData.slides.length);
+                
+                createPlatforms();
+                createSlides();
+                
+                document.getElementById('stats').innerHTML = `
+                    ${zigzagData.platforms.length} plateformes<br>
+                    ${zigzagData.slides.length} tobogans<br>
+                    <span style="color:#FF6B35;">Zigzag Musical</span>
+                `;
+                
+                return true;
+            } catch (error) {
+                console.error('Error loading zigzag data:', error);
+                document.getElementById('stats').textContent = 'Erreur chargement';
+                return false;
+            }
+        }
+
+        function createPlatforms() {
+            zigzagData.platforms.forEach((data, i) => {
+                const { x, y, z, size, color } = data;
+                const colorHex = parseInt(color);
+                
+                // Visual
+                const geometry = new THREE.CylinderGeometry(size * 0.8, size * 0.8, 0.3, 16);
+                const material = new THREE.MeshStandardMaterial({
+                    color: colorHex,
+                    emissive: colorHex,
+                    emissiveIntensity: 0.6,
+                    metalness: 0.5,
+                    roughness: 0.3
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(x, y, z);
+                mesh.castShadow = true;
+                mesh.userData.platformIndex = i;
+                mesh.userData.midiNote = data.midiNote;
+                scene.add(mesh);
+                platforms.push(mesh);
+                
+                // Light
+                const light = new THREE.PointLight(colorHex, 2, 5);
+                light.position.set(x, y, z);
+                scene.add(light);
+                mesh.userData.light = light;
+                
+                // Physics
+                const shape = new CANNON.Cylinder(size * 0.8, size * 0.8, 0.3, 16);
+                const body = new CANNON.Body({ 
+                    mass: 0, 
+                    material: platformMaterial 
+                });
+                body.addShape(shape);
+                body.position.set(x, y, z);
+                body.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2);
+                body.userData = { platformIndex: i, midiNote: data.midiNote };
+                world.addBody(body);
+                platformBodies.push(body);
+            });
+            
+            console.log(`✓ ${platforms.length} platforms created`);
+        }
+
+        function createSlides() {
+            zigzagData.slides.forEach((slide, i) => {
+                const dx = slide.endX - slide.startX;
+                const dy = slide.endY - slide.startY;
+                const dz = slide.endZ - slide.startZ;
+                const length = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                
+                const midX = (slide.startX + slide.endX) / 2;
+                const midY = (slide.startY + slide.endY) / 2;
+                const midZ = (slide.startZ + slide.endZ) / 2;
+                
+                // Visual - TUBE TOBOGAN 3D
+                const radius = slide.radius || 0.6;
+                const segments = slide.segments || 16;
+                const geometry = new THREE.CylinderGeometry(radius, radius, length, segments, 1, true);
+                const material = new THREE.MeshStandardMaterial({
+                    color: 0x4ECDC4,
+                    transparent: true,
+                    opacity: 0.5,
+                    metalness: 0.9,
+                    roughness: 0.1,
+                    side: THREE.DoubleSide,
+                    emissive: 0x1a7a7a,
+                    emissiveIntensity: 0.2
+                });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(midX, midY, midZ);
+                
+                // Rotation pour aligner le tube
+                const angleY = Math.atan2(dx, dz);
+                const angleX = Math.atan2(dy, Math.sqrt(dx*dx + dz*dz));
+                mesh.rotation.y = angleY;
+                mesh.rotation.x = -angleX + Math.PI/2; // +90° pour tube horizontal
+                
+                mesh.receiveShadow = true;
+                mesh.castShadow = true;
+                scene.add(mesh);
+                slides.push(mesh);
+                
+                // Physics - Tube cylindrique
+                const shape = new CANNON.Cylinder(radius, radius, length, segments);
+                const body = new CANNON.Body({ mass: 0, material: slideMaterial });
+                body.addShape(shape);
+                body.position.set(midX, midY, midZ);
+                body.quaternion.setFromEuler(-angleX + Math.PI/2, angleY, 0);
+                world.addBody(body);
+                slideBodies.push(body);
+            });
+            
+            console.log(`✓ ${slides.length} slides created`);
+        }
+
+        // Collision detection
+        ballBody.addEventListener('collide', (event) => {
+            const body = event.body;
+            if (body.userData && body.userData.platformIndex !== undefined) {
+                const idx = body.userData.platformIndex;
+                if (!collisionHistory.has(idx)) {
+                    collisionHistory.add(idx);
+                    notesPlayed++;
+                    
+                    const platform = platforms[idx];
+                    const midiNote = body.userData.midiNote;
+                    
+                    // Play note
+                    playNote(midiNote, 0.4, 0.8);
+                    
+                    // Flash light
+                    if (platform.userData.light) {
+                        platform.userData.light.intensity = 8;
+                        setTimeout(() => {
+                            platform.userData.light.intensity = 2;
+                        }, 150);
+                    }
+                    
+                    console.log(`🎵 Platform ${idx} - Note ${midiNote} (${notesPlayed}/${zigzagData.platforms.length})`);
+                }
+            }
+        });
+
+        // ========== CAMERA ==========
+        let cameraMode = 'side'; // 'side', 'follow', 'orbit'
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enabled = false;
+        
+        window.toggleCamera = function() {
+            if (cameraMode === 'side') {
+                cameraMode = 'follow';
+            } else if (cameraMode === 'follow') {
+                cameraMode = 'orbit';
+                controls.enabled = true;
+            } else {
+                cameraMode = 'side';
+                controls.enabled = false;
+            }
+            document.getElementById('camMode').textContent = cameraMode;
+        };
+
+        // ========== CONTROLS ==========
+        window.startBall = function() {
+            if (!zigzagData) return;
+            
+            const start = zigzagData.metadata.ballStart;
+            ballBody.position.set(start.x, start.y, start.z);
+            ballBody.velocity.set(start.velocity.x, start.velocity.y, start.velocity.z);
+            ballBody.angularVelocity.set(0, 0, 0);
+            collisionHistory.clear();
+            notesPlayed = 0;
+            startTime = Date.now();
+            console.log('🎢 Ball started on zigzag course!');
+        };
+        
+        window.resetBall = function() {
+            if (!zigzagData) return;
+            // Place la boule DANS le premier tube
+            const firstPlatform = zigzagData.platforms[0];
+            ballBody.position.set(
+                firstPlatform.x, 
+                firstPlatform.y + 1.5,  // Au-dessus de la première plateforme
+                firstPlatform.z
+            );
+            ballBody.velocity.set(0, -1, 0);  // Tombe doucement
+            ballBody.angularVelocity.set(0, 0, 0);
+            collisionHistory.clear();
+            notesPlayed = 0;
+            startTime = Date.now();
+            console.log('🔄 Ball reset au tube!');
+        };
+
+        // ========== INIT ==========
+        loadZigzagData().then(success => {
+            if (success) {
+                console.log('✅ Ready! Click START to begin');
+            }
+        });
+
+        // ========== ANIMATION ==========
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            world.step(1/60);
+            
+            // Sync ball
+            ballMesh.position.copy(ballBody.position);
+            ballMesh.quaternion.copy(ballBody.quaternion);
+            ballLight.position.copy(ballBody.position);
+            
+            // Camera modes
+            const ballPos = ballBody.position;
+            if (cameraMode === 'side') {
+                // Vue latérale qui suit
+                camera.position.set(
+                    15,
+                    ballPos.y + 5,
+                    ballPos.z
+                );
+                camera.lookAt(ballPos.x, ballPos.y, ballPos.z);
+            } else if (cameraMode === 'follow') {
+                // Vue de face
+                camera.position.set(
+                    ballPos.x,
+                    ballPos.y + 3,
+                    ballPos.z + 10
+                );
+                camera.lookAt(ballPos.x, ballPos.y, ballPos.z);
+            }
+            
+            // Debug
+            const v = ballBody.velocity;
+            const speed = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
+            const elapsed = startTime ? ((Date.now() - startTime) / 1000).toFixed(1) : '0.0';
+            document.getElementById('debugInfo').innerHTML = `
+                Pos: (${ballPos.x.toFixed(1)}, ${ballPos.y.toFixed(1)}, ${ballPos.z.toFixed(1)})<br>
+                Speed: ${speed.toFixed(1)} m/s<br>
+                Notes: ${notesPlayed}/${zigzagData ? zigzagData.platforms.length : 0}<br>
+                Time: ${elapsed}s<br>
+                Cam: ${cameraMode}
+            `;
+            
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
