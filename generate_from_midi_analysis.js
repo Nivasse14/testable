@@ -1,0 +1,333 @@
+#!/usr/bin/env node
+
+/**
+ * 🎨 GÉNÉRATEUR DE TRAJECTOIRE HYBRIDE DEPUIS ANALYSE MIDI
+ * Crée des rebonds Bézier + tubes spiraux synchronisés à la musique
+ */
+
+import { readFileSync, writeFileSync } from 'fs';
+
+// ========== CONFIGURATION ==========
+const CONFIG = {
+    startHeight: 80,       // Hauteur de départ (m)
+    endHeight: 2,          // Hauteur finale (m)
+    ball: { radius: 0.5 },
+    
+    // Paramètres des rebonds
+    bounce: {
+        minHeight: 3,      // Rebond minimal (note faible)
+        maxHeight: 8,      // Rebond maximal (note forte) - réduit pour plus de réalisme
+        apexRatio: 0.55    // Position de l'apex (0.5 = milieu, 0.55 = légèrement après)
+    },
+    
+    // Paramètres des tubes spiraux
+    spiral: {
+        radius: 4,         // Rayon de la spirale
+        rotationsPerSecond: 0.5  // Vitesse de rotation
+    },
+    
+    fps: 60
+};
+
+/**
+ * Génère un arc de rebond parfait avec courbe de Bézier
+ */
+function generateBounceArc(startPos, endPos, startTime, endTime, velocity) {
+    const keyframes = [];
+    const duration = endTime - startTime;
+    const frames = Math.ceil(duration * CONFIG.fps);
+    
+    // Hauteur de rebond basée sur la velocity MIDI (0-127)
+    const bounceHeight = CONFIG.bounce.minHeight + 
+        (velocity / 127) * (CONFIG.bounce.maxHeight - CONFIG.bounce.minHeight);
+    
+    // Points de contrôle Bézier cubique pour un rebond naturel
+    const p0 = startPos;
+    const p3 = endPos;
+    
+    // Distance horizontale totale
+    const horizontalDist = Math.sqrt(
+        Math.pow(endPos.x - startPos.x, 2) + 
+        Math.pow(endPos.z - startPos.z, 2)
+    );
+    
+    // Contrôle 1: montée avec angle naturel (30-45°)
+    const p1 = {
+        x: startPos.x + (endPos.x - startPos.x) * 0.25,
+        y: startPos.y + bounceHeight * 0.5,
+        z: startPos.z + (endPos.z - startPos.z) * 0.25
+    };
+    
+    // Contrôle 2: apex puis début de descente
+    const apexHeight = Math.max(startPos.y, endPos.y) + bounceHeight;
+    const p2 = {
+        x: startPos.x + (endPos.x - startPos.x) * CONFIG.bounce.apexRatio,
+        y: apexHeight,
+        z: startPos.z + (endPos.z - startPos.z) * CONFIG.bounce.apexRatio
+    };
+    
+    // Échantillonner la courbe de Bézier
+    for (let i = 0; i <= frames; i++) {
+        const t = i / frames;
+        const time = startTime + t * duration;
+        
+        // Courbe de Bézier cubique: B(t) = (1-t)³P0 + 3(1-t)²tP1 + 3(1-t)t²P2 + t³P3
+        const mt = 1 - t;
+        const mt2 = mt * mt;
+        const mt3 = mt2 * mt;
+        const t2 = t * t;
+        const t3 = t2 * t;
+        
+        const x = mt3 * p0.x + 3 * mt2 * t * p1.x + 3 * mt * t2 * p2.x + t3 * p3.x;
+        const y = mt3 * p0.y + 3 * mt2 * t * p1.y + 3 * mt * t2 * p2.y + t3 * p3.y;
+        const z = mt3 * p0.z + 3 * mt2 * t * p1.z + 3 * mt * t2 * p2.z + t3 * p3.z;
+        
+        // Calculer la vélocité (dérivée de la courbe)
+        let vx = 0, vy = 0, vz = 0;
+        if (i < frames) {
+            const dt = duration / frames;
+            const nextT = (i + 1) / frames;
+            const nextMt = 1 - nextT;
+            const nextMt2 = nextMt * nextMt;
+            const nextMt3 = nextMt2 * nextMt;
+            const nextT2 = nextT * nextT;
+            const nextT3 = nextT2 * nextT;
+            
+            const nextX = nextMt3 * p0.x + 3 * nextMt2 * nextT * p1.x + 3 * nextMt * nextT2 * p2.x + nextT3 * p3.x;
+            const nextY = nextMt3 * p0.y + 3 * nextMt2 * nextT * p1.y + 3 * nextMt * nextT2 * p2.y + nextT3 * p3.y;
+            const nextZ = nextMt3 * p0.z + 3 * nextMt2 * nextT * p1.z + 3 * nextMt * nextT2 * p2.z + nextT3 * p3.z;
+            
+            vx = (nextX - x) / dt;
+            vy = (nextY - y) / dt;
+            vz = (nextZ - z) / dt;
+        }
+        
+        keyframes.push({
+            time: Math.round(time * 1000),
+            position: { x, y, z },
+            velocity: { x: vx, y: vy, z: vz }
+        });
+    }
+    
+    return keyframes;
+}
+
+/**
+ * Génère un tube spiral de transition
+ */
+function generateSpiralTube(startPos, endPos, startTime, endTime) {
+    const keyframes = [];
+    const duration = endTime - startTime;
+    const frames = Math.ceil(duration * CONFIG.fps);
+    const totalRotations = duration * CONFIG.spiral.rotationsPerSecond;
+    
+    const centerX = (startPos.x + endPos.x) / 2;
+    const centerZ = (startPos.z + endPos.z) / 2;
+    
+    for (let i = 0; i <= frames; i++) {
+        const t = i / frames;
+        const time = startTime + t * duration;
+        
+        // Descente linéaire
+        const y = startPos.y + t * (endPos.y - startPos.y);
+        
+        // Rotation spirale
+        const angle = t * totalRotations * Math.PI * 2;
+        const x = centerX + CONFIG.spiral.radius * Math.cos(angle);
+        const z = centerZ + CONFIG.spiral.radius * Math.sin(angle);
+        
+        // Vélocité
+        const angularVel = (totalRotations * Math.PI * 2) / duration;
+        const vx = -CONFIG.spiral.radius * angularVel * Math.sin(angle);
+        const vy = (endPos.y - startPos.y) / duration;
+        const vz = CONFIG.spiral.radius * angularVel * Math.cos(angle);
+        
+        keyframes.push({
+            time: Math.round(time * 1000),
+            position: { x, y, z },
+            velocity: { x: vx, y: vy, z: vz }
+        });
+    }
+    
+    return keyframes;
+}
+
+/**
+ * Génère les plateformes et rampes pour les notes
+ */
+function generatePlatformsFromNotes(notes, totalHeight) {
+    const platforms = [];
+    const heightPerNote = totalHeight / notes.length;
+    let currentY = CONFIG.startHeight;
+    
+    notes.forEach((note, index) => {
+        // Varier la position X/Z selon le pitch de la note
+        const pitchNormalized = (note.pitch - 40) / 60; // Normaliser pitch entre 0 et 1
+        const x = Math.sin(pitchNormalized * Math.PI * 4) * 8; // Ondulation X
+        const z = index * 0.5; // Progression Z
+        
+        platforms.push({
+            id: `platform_${index}`,
+            x,
+            y: currentY,
+            z,
+            width: 3,
+            height: 0.5,
+            depth: 3,
+            shape: 'box',
+            noteTime: note.time,
+            pitch: note.pitch,
+            velocity: note.velocity,
+            duration: note.duration || 0.3
+        });
+        
+        currentY -= heightPerNote;
+    });
+    
+    return platforms;
+}
+
+async function main() {
+    const analysisPath = process.argv[2] || 'data/leo_midi_analysis.json';
+    const outputPath = process.argv[3] || 'data/leo_hybrid_trajectory.json';
+    
+    console.log('🎨 Génération trajectoire hybride MIDI...\n');
+    
+    // Charger l'analyse MIDI
+    const analysis = JSON.parse(readFileSync(analysisPath, 'utf8'));
+    
+    console.log(`📊 Notes MIDI: ${analysis.notes.length}`);
+    console.log(`🌀 Événements: ${analysis.events.length}`);
+    console.log(`⏱️  Durée: ${analysis.metadata.duration.toFixed(2)}s\n`);
+    
+    // Limiter au premier 30 secondes pour test
+    const maxDuration = 30;
+    let filteredNotes = analysis.notes.filter(n => n.time < maxDuration);
+    
+    // OPTIMISATION: Prendre seulement 1 note sur N pour éviter trop de plateformes
+    const noteSkip = 3; // Prendre 1 note sur 3 (plus de notes = plus fluide)
+    filteredNotes = filteredNotes.filter((n, i) => i % noteSkip === 0);
+    
+    // OPTIMISATION 2: Éliminer les notes trop proches (< 0.5s)
+    const minNoteGap = 0.5; // secondes minimum entre notes
+    const cleanedNotes = [];
+    let lastTime = -999;
+    for (const note of filteredNotes) {
+        if (note.time - lastTime >= minNoteGap) {
+            cleanedNotes.push(note);
+            lastTime = note.time;
+        }
+    }
+    filteredNotes = cleanedNotes;
+    
+    console.log(`✂️  Filtré pour test: ${filteredNotes.length} notes (${maxDuration}s, 1/${noteSkip})`);
+    
+    // Générer les plateformes
+    const totalHeight = CONFIG.startHeight - CONFIG.endHeight;
+    const platforms = generatePlatformsFromNotes(filteredNotes, totalHeight);
+    
+    console.log(`📦 Généré: ${platforms.length} plateformes\n`);
+    
+    // Générer la trajectoire complète
+    console.log('🎯 Génération des keyframes...');
+    const allKeyframes = [];
+    let currentPos = {
+        x: platforms[0].x,
+        y: platforms[0].y + 0.5,
+        z: platforms[0].z
+    };
+    
+    // Générer un rebond entre chaque paire de plateformes consécutives
+    for (let i = 0; i < platforms.length - 1; i++) {
+        const platform = platforms[i];
+        const nextPlatform = platforms[i + 1];
+        
+        const startPos = currentPos;
+        const endPos = {
+            x: nextPlatform.x,
+            y: nextPlatform.y + 0.5,
+            z: nextPlatform.z
+        };
+        
+        const startTime = platform.noteTime;
+        const endTime = nextPlatform.noteTime;
+        const note = filteredNotes[i];
+        
+        // Générer l'arc de rebond
+        const bounceKeyframes = generateBounceArc(
+            startPos,
+            endPos,
+            startTime,
+            endTime,
+            note.velocity
+        );
+        
+        allKeyframes.push(...bounceKeyframes);
+        currentPos = endPos;
+    }
+    
+    // Dédupliquer les keyframes par temps
+    const uniqueKeyframes = [];
+    const seenTimes = new Set();
+    
+    allKeyframes.forEach(kf => {
+        if (!seenTimes.has(kf.time)) {
+            seenTimes.add(kf.time);
+            uniqueKeyframes.push(kf);
+        }
+    });
+    
+    // Trier par temps
+    uniqueKeyframes.sort((a, b) => a.time - b.time);
+    
+    console.log(`✅ ${uniqueKeyframes.length} keyframes générés\n`);
+    
+    // Créer le JSON final
+    const output = {
+        version: '2.0',
+        mode: 'keyframes',
+        source: 'midi_hybrid',
+        platforms,
+        ramps: [],
+        metadata: {
+            midi: {
+                filename: analysis.metadata.filename,
+                duration: analysis.metadata.duration,
+                tempo: analysis.metadata.tempo,
+                noteCount: analysis.metadata.noteCount
+            },
+            heightRange: { top: CONFIG.startHeight, bottom: CONFIG.endHeight },
+            config: {
+                ball: {
+                    mode: 'keyframes',
+                    radius: CONFIG.ball.radius,
+                    trajectoryMode: 'keyframes',
+                    keyframes: uniqueKeyframes
+                },
+                visual: {
+                    wall: { enabled: false },
+                    platforms: {
+                        enabled: true,
+                        color: 0xff00ff,
+                        opacity: 0.8
+                    },
+                    supports: { enabled: false },
+                    lights: {
+                        enabled: true,
+                        intensity: 2,
+                        distance: 15
+                    }
+                }
+            }
+        }
+    };
+    
+    writeFileSync(outputPath, JSON.stringify(output, null, 2));
+    
+    console.log(`✅ Trajectoire hybride sauvegardée: ${outputPath}`);
+    console.log(`\n🎬 Visualiser avec:`);
+    console.log(`   http://localhost:8001/test_timed_trajectory_viewer.html`);
+    console.log(`   Puis cliquer sur "🎵 Load Timed Mode"\n`);
+}
+
+main();

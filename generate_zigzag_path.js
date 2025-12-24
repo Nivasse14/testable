@@ -28,7 +28,20 @@ const CONFIG = {
             x: 0,
             y: 0,
             z: 0
-        }
+        },
+        // ========== TRAJECTOIRE AVEC KEYFRAMES ==========
+        // Si trajectoryMode = 'keyframes', la balle suivra ces positions exactes
+        // Si trajectoryMode = 'physics', simulation physique normale
+        trajectoryMode: 'physics',  // 'physics' ou 'keyframes'
+        keyframes: [
+            // Format: { time: milliseconds, position: {x,y,z}, velocity: {x,y,z} }
+            // Exemple pour forcer la balle à suivre un chemin précis:
+            // { time: 0, position: {x: 0, y: 20.75, z: 0}, velocity: {x: 0, y: 0, z: 0} },
+            // { time: 500, position: {x: 0, y: 19, z: 1.5}, velocity: {x: 0, y: -2, z: 1} },
+            // { time: 1000, position: {x: 0, y: 17, z: 3}, velocity: {x: 0, y: -1.5, z: 1} }
+            
+            // Pour activer: changer trajectoryMode à 'keyframes' et décommenter ci-dessous
+        ]
     },
     friction: {
         platform: 0.4,

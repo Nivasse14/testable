@@ -22,6 +22,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@tonejs/midi": "^2.0.28",
     "midi-parser-js": "^4.0.4",
     "node-fetch": "^2.7.0",
     "three": "^0.182.0"

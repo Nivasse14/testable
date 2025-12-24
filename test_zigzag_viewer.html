@@ -489,11 +489,74 @@
             document.getElementById('camMode').textContent = cameraMode.charAt(0).toUpperCase() + cameraMode.slice(1);
         };
 
+        // ========== KEYFRAME SYSTEM ==========
+        let trajectoryMode = 'physics';  // 'physics' ou 'keyframes'
+        let keyframes = [];
+        let playbackStartTime = null;
+        
+        function interpolateKeyframes(currentTime) {
+            if (keyframes.length === 0) return null;
+            
+            // Trouver les keyframes avant et après
+            let beforeKf = keyframes[0];
+            let afterKf = keyframes[keyframes.length - 1];
+            
+            for (let i = 0; i < keyframes.length - 1; i++) {
+                if (keyframes[i].time <= currentTime && keyframes[i + 1].time > currentTime) {
+                    beforeKf = keyframes[i];
+                    afterKf = keyframes[i + 1];
+                    break;
+                }
+            }
+            
+            // Si on est avant le premier keyframe
+            if (currentTime < keyframes[0].time) {
+                return keyframes[0];
+            }
+            
+            // Si on est après le dernier keyframe
+            if (currentTime > keyframes[keyframes.length - 1].time) {
+                return keyframes[keyframes.length - 1];
+            }
+            
+            // Interpolation linéaire entre beforeKf et afterKf
+            const timeDelta = afterKf.time - beforeKf.time;
+            const t = (currentTime - beforeKf.time) / timeDelta;
+            
+            return {
+                position: {
+                    x: beforeKf.position.x + (afterKf.position.x - beforeKf.position.x) * t,
+                    y: beforeKf.position.y + (afterKf.position.y - beforeKf.position.y) * t,
+                    z: beforeKf.position.z + (afterKf.position.z - beforeKf.position.z) * t
+                },
+                velocity: {
+                    x: beforeKf.velocity.x + (afterKf.velocity.x - beforeKf.velocity.x) * t,
+                    y: beforeKf.velocity.y + (afterKf.velocity.y - beforeKf.velocity.y) * t,
+                    z: beforeKf.velocity.z + (afterKf.velocity.z - beforeKf.velocity.z) * t
+                }
+            };
+        }
+
         // ========== CONTROLS ==========
         window.startBall = function() {
             if (!pathData) return;
             
             const ballStart = pathData.metadata.ballStart;
+            const config = pathData.metadata.config;
+            
+            // Charger le mode de trajectoire et les keyframes depuis le JSON
+            if (config.ball.trajectoryMode === 'keyframes' && config.ball.keyframes && config.ball.keyframes.length > 0) {
+                trajectoryMode = 'keyframes';
+                keyframes = config.ball.keyframes;
+                playbackStartTime = Date.now();
+                console.log(`🎬 Mode KEYFRAMES: ${keyframes.length} keyframes chargés`);
+            } else {
+                trajectoryMode = 'physics';
+                keyframes = [];
+                playbackStartTime = null;
+                console.log('🎱 Mode PHYSICS: simulation physique normale');
+            }
+            
             ballBody.position.set(ballStart.x, ballStart.y, ballStart.z);
             ballBody.velocity.set(ballStart.velocity.x, ballStart.velocity.y, ballStart.velocity.z);
             ballBody.angularVelocity.set(0, 0, 0);
@@ -508,6 +571,23 @@
         function animate() {
             requestAnimationFrame(animate);
             
+            // ========== MODE KEYFRAMES ==========
+            if (trajectoryMode === 'keyframes' && playbackStartTime !== null) {
+                const elapsedMs = Date.now() - playbackStartTime;
+                const kf = interpolateKeyframes(elapsedMs);
+                
+                if (kf) {
+                    // Forcer la position et vélocité depuis les keyframes
+                    ballBody.position.set(kf.position.x, kf.position.y, kf.position.z);
+                    ballBody.velocity.set(kf.velocity.x, kf.velocity.y, kf.velocity.z);
+                    
+                    // Conserver la rotation physique pour l'effet visuel
+                    ballBody.angularVelocity.y = kf.velocity.x * 2;
+                    ballBody.angularVelocity.x = -kf.velocity.z * 2;
+                }
+            }
+            
+            // ========== MODE PHYSICS ==========
             world.step(1/60);
             
             // Sync ball

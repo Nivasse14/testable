@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>🎬 Trajectoire Temporelle - MIDI Sync</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: monospace; }
+        canvas { display: block; }
+        #ui {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.9);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 100;
+            min-width: 250px;
+        }
+        button {
+            background: #FF6B35;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px 0;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            width: 100%;
+        }
+        button:hover { background: #FF8555; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        #debug {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            color: white;
+            background: rgba(0,0,0,0.9);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 11px;
+        }
+        .stat { color: #4ECDC4; margin: 5px 0; }
+        .mode { color: #FFD700; font-weight: bold; margin: 10px 0; }
+        input[type="range"] {
+            width: 100%;
+            margin: 5px 0;
+        }
+        .timeline {
+            background: #222;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h3 style="margin:0 0 10px 0; color:#4ECDC4;">🎬 Trajectoire Temporelle</h3>
+        
+        <div class="mode">Mode: <span id="trajectoryMode">PHYSICS</span></div>
+        
+        <button onclick="loadPath('data/zigzag_path.json')">📄 Load Physics Mode</button>
+        <button onclick="loadPath('data/leo_timed_path.json')">🎵 Load Timed Mode</button>
+        
+        <hr style="border-color: #333; margin: 10px 0;">
+        
+        <button id="startBtn" onclick="startBall()" disabled>▶️ START</button>
+        <button onclick="toggleCamera()">📷 <span id="camMode">Side</span></button>
+        <button onclick="testAudio()" style="background:#FFD700;">🔊 Test Audio</button>
+        
+        <div class="timeline" id="timeline" style="display: none;">
+            <div class="stat">Timeline: <span id="currentTime">0.00s</span></div>
+            <input type="range" id="timelineSlider" min="0" max="100" value="0" onchange="seekTimeline(this.value)">
+            <div class="stat" style="font-size: 9px;">
+                Keyframe: <span id="currentKeyframe">-</span>
+            </div>
+        </div>
+        
+        <hr style="border-color: #333; margin: 10px 0;">
+        
+        <div class="stat">Fichier: <span id="fileName">-</span></div>
+        <div class="stat">Plateformes: <span id="platformCount">0</span></div>
+        <div class="stat">Keyframes: <span id="keyframeCount">-</span></div>
+        <div class="stat">Notes: <span id="noteCount">0/0</span></div>
+        <div class="stat" style="font-size: 14px; color: #FFD700; font-weight: bold; margin-top: 10px;">
+            📏 Hauteur: <span id="ballHeight">--</span>m
+        </div>
+        <div class="stat" style="font-size: 12px; color: #FF6B6B;">
+            🚀 Rebond: <span id="bounceHeight">--</span>m
+        </div>
+    </div>
+
+    <div id="debug">
+        <div id="debugInfo" style="color:#4ECDC4;">Waiting...</div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+            "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
+        }
+    }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import * as CANNON from 'cannon-es';
+        
+        // MIDI Audio support
+        let midiSynth = null;
+        let midiNotes = [];
+        let audioInitialized = false;
+
+        let scene, camera, renderer, world, controls;
+        let ballMesh, ballBody, ballLight;
+        let platforms = [];
+        let ramps = [];
+        let pathData = null;
+        let collisionHistory = new Set();
+        let notesPlayed = 0;
+        let startTime = null;
+
+        // Keyframe system
+        let trajectoryMode = 'physics';
+        let keyframes = [];
+        let playbackStartTime = null;
+        let maxDuration = 0;
+
+        // ========== INIT ==========
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000814);
+            scene.fog = new THREE.Fog(0x000814, 10, 80);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(20, 15, 15);  // Plus loin pour voir le mur
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            // Controls (after renderer is created)
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enabled = false;
+
+            // Physics
+            world = new CANNON.World();
+            world.gravity.set(0, -9.8, 0);
+            world.defaultContactMaterial.friction = 0.3;
+
+            // Ball light
+            ballLight = new THREE.PointLight(0xFFFFFF, 0, 5);
+            scene.add(ballLight);
+            
+            // Lumière ambiante pour voir le mur
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
+            scene.add(ambientLight);
+            
+            // Lumière directionnelle
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            dirLight.position.set(10, 20, 10);
+            scene.add(dirLight);
+
+            console.log('✅ Scene initialized');
+        }
+
+        // ========== LOAD PATH ==========
+        window.loadPath = async function(jsonPath) {
+            console.log(`📂 Loading: ${jsonPath}`);
+            
+            try {
+                // Add cache-busting timestamp to JSON URL
+                const cacheBuster = `?t=${Date.now()}`;
+                const urlWithCache = jsonPath + cacheBuster;
+                console.log(`🔥 Cache-busting URL: ${urlWithCache}`);
+                
+                const response = await fetch(urlWithCache);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                pathData = await response.json();
+                
+                console.log('✅ JSON loaded:', {
+                    platforms: pathData.platforms?.length,
+                    ramps: pathData.ramps?.length,
+                    hasMetadata: !!pathData.metadata,
+                    hasConfig: !!pathData.metadata?.config
+                });
+                
+                // Clear scene
+                platforms.forEach(p => {
+                    scene.remove(p);
+                    if (p.userData?.body) world.removeBody(p.userData.body);
+                });
+                ramps.forEach(r => scene.remove(r));
+                platforms = [];
+                ramps = [];
+                
+                // Load config
+                const config = pathData.metadata?.config || {};
+                const ballConfig = config.ball || {};
+                trajectoryMode = ballConfig.trajectoryMode || 'physics';
+                keyframes = ballConfig.keyframes || [];
+                maxDuration = keyframes.length > 0 ? keyframes[keyframes.length - 1].time / 1000 : 0;
+                
+                // Update UI
+                document.getElementById('trajectoryMode').textContent = trajectoryMode.toUpperCase();
+                document.getElementById('fileName').textContent = jsonPath.split('/').pop();
+                document.getElementById('platformCount').textContent = pathData.platforms?.length || 0;
+                document.getElementById('keyframeCount').textContent = keyframes.length || '-';
+                document.getElementById('noteCount').textContent = `0/${pathData.platforms?.length || 0}`;
+                document.getElementById('startBtn').disabled = false;
+                
+                // Timeline
+                if (trajectoryMode === 'keyframes') {
+                    document.getElementById('timeline').style.display = 'block';
+                    document.getElementById('timelineSlider').max = Math.ceil(maxDuration);
+                } else {
+                    document.getElementById('timeline').style.display = 'none';
+                }
+                
+                // Create visuals
+                const visualConfig = config.visual || {};
+                if (visualConfig.wall?.enabled) createTiledWall(visualConfig.wall);
+                if (visualConfig.spiralTube?.enabled) createSpiralTube(visualConfig.spiralTube);
+                createPlatforms();
+                createRamps();
+                createBall();
+                
+                console.log(`✅ Loaded: ${trajectoryMode} mode with ${keyframes.length} keyframes`);
+                return true;
+                
+            } catch (error) {
+                console.error('❌ Load failed:', error);
+                return false;
+            }
+        };
+
+        // ========== CREATE TILED WALL ==========
+        function createTiledWall(config) {
+            console.log('🧱 Creating tiled wall at x=' + config.position.x);
+            
+            const gridSize = 50;
+            const tileSize = config.tileSize;
+            const tilesX = Math.ceil(gridSize / tileSize);
+            const tilesY = Math.ceil(gridSize / tileSize);
+            
+            let tileCount = 0;
+            
+            for (let i = 0; i < tilesX; i++) {
+                for (let j = 0; j < tilesY; j++) {
+                    const isDark = (i + j) % 2 === 0;
+                    const color = isDark ? config.colors.dark : config.colors.light;
+                    
+                    const geometry = new THREE.PlaneGeometry(tileSize, tileSize);
+                    const material = new THREE.MeshStandardMaterial({
+                        color: color,
+                        metalness: config.material.metalness,
+                        roughness: config.material.roughness
+                    });
+                    
+                    const tile = new THREE.Mesh(geometry, material);
+                    tile.position.set(
+                        config.position.x,
+                        j * tileSize - gridSize / 2 + tileSize / 2,
+                        i * tileSize - gridSize / 2 + tileSize / 2
+                    );
+                    tile.rotation.y = Math.PI / 2;
+                    scene.add(tile);
+                    tileCount++;
+                }
+            }
+            
+            console.log(`✅ Created ${tileCount} wall tiles`);
+        }
+
+        // ========== CREATE SPIRAL TUBE ==========
+        function createSpiralTube(visualConfig) {
+            if (!pathData || !pathData.spiralTube) return;
+            
+            console.log(`🌀 Creating spiral tube with ${pathData.spiralTube.length} segments`);
+            
+            const segments = pathData.spiralTube;
+            const tubeColor = visualConfig.color || 0x00ff88;
+            const tubeOpacity = visualConfig.opacity || 0.4;
+            const emissiveColor = visualConfig.emissive || 0x004400;
+            
+            // Créer le tube comme une série de cylindres connectés
+            for (let i = 0; i < segments.length - 1; i++) {
+                const seg1 = segments[i];
+                const seg2 = segments[i + 1];
+                
+                // Position et direction entre deux segments
+                const pos1 = new THREE.Vector3(seg1.position.x, seg1.position.y, seg1.position.z);
+                const pos2 = new THREE.Vector3(seg2.position.x, seg2.position.y, seg2.position.z);
+                const direction = new THREE.Vector3().subVectors(pos2, pos1);
+                const length = direction.length();
+                
+                // Créer un cylindre entre les deux points
+                const geometry = new THREE.CylinderGeometry(seg1.radius, seg2.radius, length, 8);
+                const material = new THREE.MeshPhongMaterial({
+                    color: tubeColor,
+                    transparent: true,
+                    opacity: tubeOpacity,
+                    emissive: emissiveColor,
+                    emissiveIntensity: 0.3,
+                    side: THREE.DoubleSide
+                });
+                
+                const cylinder = new THREE.Mesh(geometry, material);
+                
+                // Positionner et orienter le cylindre
+                cylinder.position.copy(pos1).add(direction.multiplyScalar(0.5));
+                cylinder.quaternion.setFromUnitVectors(
+                    new THREE.Vector3(0, 1, 0),
+                    direction.normalize()
+                );
+                
+                scene.add(cylinder);
+            }
+            
+            console.log(`✅ Spiral tube created!`);
+        }
+
+        // ========== CREATE PLATFORMS ==========
+        function createPlatforms() {
+            if (!pathData) return;
+            
+            const config = pathData.metadata.config;
+            const visualConfig = config.visual.platforms;
+            
+            // OPTIMISATION: Limiter le nombre de plateformes affichées
+            const maxPlatforms = 50; // Seulement 50 plateformes max à la fois
+            const totalPlatforms = pathData.platforms.length;
+            
+            console.log(`📦 Creating ${Math.min(maxPlatforms, totalPlatforms)} / ${totalPlatforms} platforms (optimisé)`);
+            console.log(`🔗 Supports enabled: ${config.visual.supports.enabled}`);
+            
+            // Prendre seulement les premières plateformes
+            const platformsToShow = pathData.platforms.slice(0, maxPlatforms);
+            
+            platformsToShow.forEach(platform => {
+                let geometry;
+                let shape;
+                
+                if (platform.shape === 'cylinder') {
+                    geometry = new THREE.CylinderGeometry(platform.radius, platform.radius, platform.height, 32);
+                    shape = new CANNON.Cylinder(platform.radius, platform.radius, platform.height, 32);
+                } else if (platform.shape === 'box') {
+                    geometry = new THREE.BoxGeometry(platform.width, platform.height, platform.depth);
+                    shape = new CANNON.Box(new CANNON.Vec3(platform.width/2, platform.height/2, platform.depth/2));
+                } else if (platform.shape === 'sphere') {
+                    geometry = new THREE.SphereGeometry(platform.radius, 32, 32);
+                    shape = new CANNON.Sphere(platform.radius);
+                }
+                
+                const material = new THREE.MeshStandardMaterial({
+                    color: platform.color,
+                    emissive: platform.color,
+                    emissiveIntensity: visualConfig.emissiveIntensity,
+                    metalness: visualConfig.metalness,
+                    roughness: visualConfig.roughness,
+                    wireframe: visualConfig.wireframe
+                });
+                
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(platform.x, platform.y, platform.z);
+                scene.add(mesh);
+                
+                const body = new CANNON.Body({
+                    mass: 0,
+                    shape: shape,
+                    position: new CANNON.Vec3(platform.x, platform.y, platform.z)
+                });
+                body.userData = { platformId: platform.id };
+                world.addBody(body);
+                
+                // Support arm
+                if (config.visual.supports.enabled) {
+                    const supportGeom = new THREE.CylinderGeometry(
+                        config.visual.supports.radius,
+                        config.visual.supports.radius,
+                        5, 8
+                    );
+                    const supportMat = new THREE.MeshStandardMaterial({
+                        color: config.visual.supports.color,
+                        metalness: config.visual.supports.material.metalness,
+                        roughness: config.visual.supports.material.roughness,
+                        wireframe: config.visual.supports.material.wireframe
+                    });
+                    const support = new THREE.Mesh(supportGeom, supportMat);
+                    support.position.set(
+                        (platform.x + config.visual.wall.position.x) / 2,
+                        platform.y,
+                        platform.z
+                    );
+                    support.rotation.z = Math.PI / 2;
+                    scene.add(support);
+                }
+                
+                // Light
+                if (config.visual.lights.enabled) {
+                    const light = new THREE.PointLight(
+                        platform.color,
+                        config.visual.lights.intensity,
+                        config.visual.lights.distance
+                    );
+                    light.position.copy(mesh.position);
+                    scene.add(light);
+                    mesh.userData.light = light;
+                }
+                
+                mesh.userData.body = body;
+                platforms.push(mesh);
+            });
+        }
+
+        // ========== CREATE RAMPS ==========
+        function createRamps() {
+            if (!pathData || !pathData.ramps) {
+                console.log('⚠️ No ramps to create');
+                return;
+            }
+            
+            const config = pathData.metadata?.config || {};
+            const rampWidth = config.rampWidth || 1.8;
+            const rampThickness = config.rampThickness || 0.15;
+            const visualConfig = config.visual?.ramps || { color: 0x44aa88, wireframe: true, metalness: 0.7, roughness: 0.4 };
+            
+            console.log(`🔗 Creating ${pathData.ramps.length} ramps`);
+            
+            pathData.ramps.forEach((ramp, idx) => {
+                // Support deux formats: {start: {x,y,z}} ou {startX, startY, startZ}
+                let start, end;
+                if (ramp.start && ramp.end) {
+                    start = ramp.start;
+                    end = ramp.end;
+                } else if (ramp.startX !== undefined && ramp.endX !== undefined) {
+                    start = { x: ramp.startX, y: ramp.startY, z: ramp.startZ };
+                    end = { x: ramp.endX, y: ramp.endY, z: ramp.endZ };
+                } else {
+                    console.error(`❌ Ramp ${idx} format invalide:`, ramp);
+                    return;
+                }
+                
+                const geometry = new THREE.BoxGeometry(rampWidth, rampThickness, ramp.length);
+                const material = new THREE.MeshStandardMaterial({
+                    color: visualConfig.color || 0x44aa88,
+                    metalness: visualConfig.metalness || 0.7,
+                    roughness: visualConfig.roughness || 0.4,
+                    wireframe: visualConfig.wireframe !== undefined ? visualConfig.wireframe : true
+                });
+                
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(
+                    (start.x + end.x) / 2,
+                    (start.y + end.y) / 2,
+                    (start.z + end.z) / 2
+                );
+                
+                mesh.rotation.y = ramp.rotation || 0;
+                mesh.rotation.x = ramp.angle || 0;
+                
+                scene.add(mesh);
+                ramps.push(mesh);
+            });
+            
+            console.log(`✅ Created ${ramps.length} ramps`);
+        }
+
+        // ========== CREATE BALL ==========
+        function createBall() {
+            if (!pathData) return;
+            
+            const config = pathData.metadata.config;
+            const radius = config.ball.radius;
+            
+            const geometry = new THREE.SphereGeometry(radius, 32, 32);
+            const material = new THREE.MeshStandardMaterial({
+                color: 0xFFFFFF,
+                emissive: 0xFFFFFF,
+                emissiveIntensity: 0.5,
+                metalness: 0.8,
+                roughness: 0.2
+            });
+            
+            ballMesh = new THREE.Mesh(geometry, material);
+            scene.add(ballMesh);
+            
+            const shape = new CANNON.Sphere(radius);
+            ballBody = new CANNON.Body({
+                mass: 1,
+                shape: shape,
+                linearDamping: 0.05,
+                angularDamping: 0.05
+            });
+            world.addBody(ballBody);
+            
+            // Collision detection
+            ballBody.addEventListener('collide', (event) => {
+                const body = event.body;
+                if (body.userData && body.userData.platformId !== undefined) {
+                    const id = body.userData.platformId;
+                    if (!collisionHistory.has(id)) {
+                        collisionHistory.add(id);
+                        notesPlayed++;
+                        
+                        const platform = platforms[id];
+                        if (platform.userData.light) {
+                            const lightsConfig = pathData.metadata.config.visual.lights;
+                            platform.userData.light.intensity = lightsConfig.flashIntensity;
+                            setTimeout(() => {
+                                platform.userData.light.intensity = lightsConfig.intensity;
+                            }, lightsConfig.flashDuration);
+                        }
+                        
+                        document.getElementById('noteCount').textContent = `${notesPlayed}/${pathData.platforms.length}`;
+                        console.log(`🎵 Platform ${id} hit! (${notesPlayed}/${pathData.platforms.length})`);
+                    }
+                }
+            });
+        }
+
+        // ========== KEYFRAME INTERPOLATION ==========
+        function interpolateKeyframes(currentTime) {
+            if (keyframes.length === 0) return null;
+            
+            let beforeKf = keyframes[0];
+            let afterKf = keyframes[keyframes.length - 1];
+            
+            for (let i = 0; i < keyframes.length - 1; i++) {
+                if (keyframes[i].time <= currentTime && keyframes[i + 1].time > currentTime) {
+                    beforeKf = keyframes[i];
+                    afterKf = keyframes[i + 1];
+                    break;
+                }
+            }
+            
+            if (currentTime < keyframes[0].time) return keyframes[0];
+            if (currentTime > keyframes[keyframes.length - 1].time) return keyframes[keyframes.length - 1];
+            
+            const timeDelta = afterKf.time - beforeKf.time;
+            const t = (currentTime - beforeKf.time) / timeDelta;
+            
+            return {
+                position: {
+                    x: beforeKf.position.x + (afterKf.position.x - beforeKf.position.x) * t,
+                    y: beforeKf.position.y + (afterKf.position.y - beforeKf.position.y) * t,
+                    z: beforeKf.position.z + (afterKf.position.z - beforeKf.position.z) * t
+                },
+                velocity: {
+                    x: beforeKf.velocity.x + (afterKf.velocity.x - beforeKf.velocity.x) * t,
+                    y: beforeKf.velocity.y + (afterKf.velocity.y - beforeKf.velocity.y) * t,
+                    z: beforeKf.velocity.z + (afterKf.velocity.z - beforeKf.velocity.z) * t
+                },
+                keyframeIndex: keyframes.indexOf(beforeKf)
+            };
+        }
+
+        // ========== TIMELINE SEEK ==========
+        window.seekTimeline = function(seconds) {
+            if (trajectoryMode !== 'keyframes' || !playbackStartTime) return;
+            
+            playbackStartTime = Date.now() - (seconds * 1000);
+            console.log(`⏩ Seek to ${seconds}s`);
+        };
+
+        // ========== CAMERA ==========
+        let cameraMode = 'side';
+        
+        window.toggleCamera = function() {
+            if (cameraMode === 'side') {
+                cameraMode = 'follow';
+                controls.enabled = false;
+            } else if (cameraMode === 'follow') {
+                cameraMode = 'orbit';
+                controls.enabled = true;
+            } else {
+                cameraMode = 'side';
+                controls.enabled = false;
+            }
+            document.getElementById('camMode').textContent = cameraMode.charAt(0).toUpperCase() + cameraMode.slice(1);
+        };
+        
+        // ========== TEST AUDIO ==========
+        window.testAudio = async function() {
+            console.log('🔊 Testing audio...');
+            await initAudio();
+            
+            if (!audioInitialized || !midiSynth) {
+                console.error('❌ Audio not initialized');
+                return;
+            }
+            
+            console.log('🎵 Playing test notes: C4, E4, G4');
+            playMidiNote(60, 90, 0.5);  // C4
+            setTimeout(() => playMidiNote(64, 90, 0.5), 500);  // E4
+            setTimeout(() => playMidiNote(67, 90, 0.5), 1000); // G4
+        };
+
+        // ========== INIT AUDIO ==========
+        async function initAudio() {
+            if (audioInitialized) return;
+            
+            try {
+                await Tone.start();
+                console.log('🔊 Audio context started');
+                
+                // Créer un synthé simple
+                midiSynth = new Tone.PolySynth(Tone.Synth, {
+                    envelope: {
+                        attack: 0.02,
+                        decay: 0.1,
+                        sustain: 0.3,
+                        release: 1
+                    }
+                }).toDestination();
+                
+                audioInitialized = true;
+                console.log('✅ MIDI synth ready');
+            } catch (e) {
+                console.error('❌ Audio init failed:', e);
+            }
+        }
+        
+        // ========== PLAY MIDI NOTE ==========
+        function playMidiNote(pitch, velocity, duration) {
+            if (!midiSynth || !audioInitialized) {
+                console.warn('⚠️ Cannot play note: synth not ready');
+                return;
+            }
+            
+            // Convertir pitch MIDI (0-127) en fréquence
+            const frequency = Tone.Frequency(pitch, "midi").toFrequency();
+            const velocityNorm = velocity / 127;
+            const durationSeconds = duration || 0.3;
+            
+            console.log(`🎵 PLAYING: pitch=${pitch}, freq=${frequency.toFixed(1)}Hz, vel=${velocityNorm.toFixed(2)}, dur=${durationSeconds.toFixed(2)}s`);
+            midiSynth.triggerAttackRelease(frequency, durationSeconds, undefined, velocityNorm);
+        }
+
+        // ========== START BALL ==========
+        window.startBall = async function() {
+            if (!pathData) return;
+            
+            // Initialiser l'audio au premier clic
+            await initAudio();
+            
+            const config = pathData.metadata.config || {};
+            const ballConfig = config.ball || {};
+            
+            trajectoryMode = ballConfig.trajectoryMode || 'physics';
+            keyframes = ballConfig.keyframes || [];
+            
+            // Charger les notes MIDI si disponibles
+            if (pathData.metadata?.midi) {
+                midiNotes = pathData.platforms.map(p => ({
+                    time: p.noteTime,
+                    pitch: p.pitch || 60,
+                    velocity: p.velocity || 90,
+                    duration: p.duration || 0.3,
+                    played: false
+                }));
+                console.log(`🎵 Loaded ${midiNotes.length} MIDI notes`);
+                console.log(`🎵 First 3 notes:`, midiNotes.slice(0, 3));
+            } else {
+                console.warn('⚠️ No MIDI metadata found');
+            }
+            
+            // Déterminer la position de départ
+            let ballStart;
+            if (keyframes.length > 0) {
+                // Utiliser le premier keyframe
+                ballStart = {
+                    x: keyframes[0].position.x,
+                    y: keyframes[0].position.y,
+                    z: keyframes[0].position.z,
+                    velocity: keyframes[0].velocity
+                };
+            } else if (pathData.metadata.ballStart) {
+                // Utiliser ballStart si défini
+                ballStart = pathData.metadata.ballStart;
+            } else {
+                // Par défaut, utiliser la première plateforme
+                const firstPlatform = pathData.platforms[0];
+                ballStart = {
+                    x: firstPlatform.x,
+                    y: firstPlatform.y + 2,
+                    z: firstPlatform.z,
+                    velocity: { x: 0, y: 0, z: 0 }
+                };
+            }
+            
+            console.log(`🚀 START BALL DEBUG:`);
+            console.log(`   Mode: ${trajectoryMode}`);
+            console.log(`   Keyframes array length: ${keyframes.length}`);
+            console.log(`   ballStart:`, ballStart);
+            console.log(`   ballConfig:`, ballConfig);
+            
+            if (trajectoryMode === 'keyframes' && keyframes.length > 0) {
+                playbackStartTime = Date.now();
+                console.log(`🎬 KEYFRAMES mode activé!`);
+                console.log(`   - ${keyframes.length} keyframes disponibles`);
+                console.log(`   - KF[0]: t=${keyframes[0].time}ms, pos=(${keyframes[0].position.x}, ${keyframes[0].position.y.toFixed(1)}, ${keyframes[0].position.z})`);
+                console.log(`   - KF[1]: t=${keyframes[1].time}ms, pos=(${keyframes[1].position.x}, ${keyframes[1].position.y.toFixed(1)}, ${keyframes[1].position.z})`);
+                console.log(`   - playbackStartTime: ${playbackStartTime}`);
+            } else {
+                playbackStartTime = null;
+                console.log('🎱 PHYSICS mode');
+            }
+            
+            ballBody.position.set(ballStart.x, ballStart.y, ballStart.z);
+            ballBody.velocity.set(ballStart.velocity.x, ballStart.velocity.y, ballStart.velocity.z);
+            ballBody.angularVelocity.set(0, 0, 0);
+            collisionHistory.clear();
+            notesPlayed = 0;
+            startTime = Date.now();
+            document.getElementById('noteCount').textContent = `0/${pathData.platforms.length}`;
+        };
+
+        // ========== ANIMATION ==========
+        let animateLogCounter = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Debug log initial (seulement une fois toutes les 60 frames)
+            if (animateLogCounter === 0) {
+                console.log(`🔄 ANIMATE: mode=${trajectoryMode}, playbackStartTime=${playbackStartTime}, keyframes=${keyframes.length}`);
+            }
+            animateLogCounter = (animateLogCounter + 1) % 60;
+            
+            // Keyframe mode - contrôle direct sans physique
+            if (trajectoryMode === 'keyframes' && playbackStartTime !== null && keyframes.length > 0) {
+                const elapsedMs = Date.now() - playbackStartTime;
+                const elapsedSeconds = elapsedMs / 1000;
+                const kf = interpolateKeyframes(elapsedMs);
+                
+                // Jouer les notes MIDI au bon moment
+                if (midiNotes.length > 0) {
+                    // Log une fois au début
+                    if (elapsedSeconds < 0.1 && elapsedSeconds > 0) {
+                        console.log(`🎵 MIDI check: audioInit=${audioInitialized}, synth=${!!midiSynth}, notes=${midiNotes.length}`);
+                        console.log(`🎵 Next note at t=${midiNotes[0].time.toFixed(2)}s, current t=${elapsedSeconds.toFixed(2)}s`);
+                    }
+                    
+                    if (audioInitialized && midiSynth) {
+                        midiNotes.forEach((note, i) => {
+                            const timeDiff = elapsedSeconds - note.time;
+                            // Jouer si on vient de passer le temps de la note (dans les 100ms)
+                            if (timeDiff >= 0 && timeDiff < 0.1 && !note.played) {
+                                playMidiNote(note.pitch, note.velocity, note.duration);
+                                note.played = true;
+                                console.log(`🎵 Note ${i}: pitch=${note.pitch} at t=${note.time.toFixed(2)}s (elapsed=${elapsedSeconds.toFixed(2)}s)`);
+                            }
+                        });
+                    } else {
+                        // Log une fois si l'audio n'est pas prêt
+                        if (elapsedSeconds > 1 && elapsedSeconds < 1.1) {
+                            console.warn('⚠️ Audio not ready: init=', audioInitialized, 'synth=', !!midiSynth);
+                        }
+                    }
+                }
+                
+                // Log debug au premier frame
+                if (elapsedMs < 100 && Math.floor(elapsedMs / 20) !== Math.floor((elapsedMs - 16) / 20)) {
+                    console.log(`🔍 Interpolation: elapsedMs=${elapsedMs.toFixed(0)}, kf=`, kf);
+                }
+                
+                if (kf) {
+                    // Mise à jour position/vitesse
+                    ballBody.position.set(kf.position.x, kf.position.y, kf.position.z);
+                    ballBody.velocity.set(kf.velocity.x, kf.velocity.y, kf.velocity.z);
+                    
+                    // Rotation visuelle (basée sur la vitesse pour effet réaliste)
+                    ballBody.angularVelocity.y = kf.velocity.x * 2;
+                    ballBody.angularVelocity.x = -kf.velocity.z * 2;
+                    
+                    // Intégration de la rotation avec le bon format (dt, target)
+                    const dt = 1/60;
+                    const wx = ballBody.angularVelocity.x;
+                    const wy = ballBody.angularVelocity.y;
+                    const wz = ballBody.angularVelocity.z;
+                    const q = ballBody.quaternion;
+                    const half_dt = dt * 0.5;
+                    const qx = q.x + half_dt * (wx * q.w + wy * q.z - wz * q.y);
+                    const qy = q.y + half_dt * (wy * q.w + wz * q.x - wx * q.z);
+                    const qz = q.z + half_dt * (wz * q.w + wx * q.y - wy * q.x);
+                    const qw = q.w + half_dt * (-wx * q.x - wy * q.y - wz * q.z);
+                    q.set(qx, qy, qz, qw);
+                    q.normalize();
+                    
+                    // Log debug toutes les 100ms avec hauteur MAX
+                    if (Math.floor(elapsedMs / 100) !== Math.floor((elapsedMs - 16) / 100)) {
+                        const platforms_y = pathData.platforms[0].y; // Première plateforme
+                        const bounce = kf.position.y - platforms_y;
+                        console.log(`⏱️  ${elapsedMs.toFixed(0)}ms: y=${kf.position.y.toFixed(1)}m (rebond: ${bounce.toFixed(1)}m au-dessus plateforme)`);
+                    }
+                    
+                    // Update UI
+                    const currentSec = elapsedMs / 1000;
+                    document.getElementById('currentTime').textContent = currentSec.toFixed(2) + 's';
+                    document.getElementById('timelineSlider').value = currentSec;
+                    document.getElementById('currentKeyframe').textContent = kf.keyframeIndex !== undefined ? kf.keyframeIndex : '-';
+                    
+                    // Afficher hauteur et rebond en temps réel
+                    const currentHeight = kf.position.y;
+                    const firstPlatformY = pathData.platforms[0].y;
+                    const bounceAmount = currentHeight - firstPlatformY;
+                    document.getElementById('ballHeight').textContent = currentHeight.toFixed(1);
+                    document.getElementById('bounceHeight').textContent = Math.max(0, bounceAmount).toFixed(1);
+                }
+            } else if (trajectoryMode === 'physics') {
+                // En mode physique, step normal
+                world.step(1/60);
+            }
+            
+            // Sync visuel avec physics body
+            if (ballMesh && ballBody) {
+                ballMesh.position.copy(ballBody.position);
+                ballMesh.quaternion.copy(ballBody.quaternion);
+                ballLight.position.copy(ballBody.position);
+            }
+            
+            // Camera
+            if (ballBody) {
+                const ballPos = ballBody.position;
+                if (cameraMode === 'side') {
+                    camera.position.set(15, ballPos.y + 5, ballPos.z);
+                    camera.lookAt(ballPos.x, ballPos.y, ballPos.z);
+                } else if (cameraMode === 'follow') {
+                    camera.position.set(ballPos.x, ballPos.y + 3, ballPos.z + 10);
+                    camera.lookAt(ballPos.x, ballPos.y, ballPos.z);
+                }
+                
+                // Debug
+                const v = ballBody.velocity;
+                const speed = Math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z);
+                const elapsed = startTime ? ((Date.now() - startTime) / 1000).toFixed(2) : '0.00';
+                
+                if (pathData) {
+                    document.getElementById('debugInfo').innerHTML = `
+                        Ball: (${ballPos.x.toFixed(1)}, ${ballPos.y.toFixed(1)}, ${ballPos.z.toFixed(1)})<br>
+                        Speed: ${speed.toFixed(1)} m/s<br>
+                        Mode: ${trajectoryMode}<br>
+                        Time: ${elapsed}s<br>
+                        Camera: ${cameraMode}
+                    `;
+                }
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // ========== INIT ==========
+        init();
+        animate();
+        console.log('✅ Ready! Load a path file to begin');
+    </script>
+</body>
+</html>
